@@ -856,6 +856,8 @@ const CARD_COLOR = c => ({'Nubank':'#8a3ffc','MP':'#1fa7e0','C6':'#555'})[c] || 
 function vParcelas(){
   const ps=S.cinfo.parcelas||[];
   let h=cartaoHead(`<button class="btn pri" data-act="nova-parcela">${svg('plus')}Nova compra parcelada</button>`) + faturasCard();
+  const soltas=comprasParceladasSoltas();
+  if(soltas.length && !readonlyView()) h += `<div class="banner" style="margin-bottom:14px"><b>Encontrei ${soltas.length===1?'1 compra parcelada':soltas.length+' compras parceladas'} que ainda não ${soltas.length===1?'está':'estão'} aqui:</b><div class="rows" style="margin-top:6px">${soltas.map(c=>`<div class="row" style="padding:6px 0;border-color:rgba(0,0,0,.08)"><div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">${esc(c.cartao)} · ${esc(c.parcela)} · total ${fmt(c.valor)} · ${c.data.split('-').reverse().join('/')}</div></div><button class="btn sm pri" data-add-solta="${c.id}">Adicionar às parcelas</button></div>`).join('')}</div></div>`;
   const ativos=ps.filter(p=>p.pagas<p.valores.length), fim=ps.filter(p=>p.pagas>=p.valores.length);
   const falta=t=>sum(ativos.filter(p=>!t||p.tipo===t),p=>sum(parcRest(p)));
   const pj=projecao(12);
@@ -916,6 +918,11 @@ function vCaixinhaCartao(){
   h += `<div class="card section"><div class="card-h"><div><h2>Últimas movimentações</h2></div><button class="btn sm ghost" data-pote="${p.id}">Ver todas</button></div><div class="rows">${rec.map(m=>`<div class="row">${dBox(m.data)}<div class="grow"><div class="t">${TP[m.tipo][0]}</div><div class="s">${esc(m.obs||'')} · ${m.data.slice(0,4)}</div></div><span class="v ${TP[m.tipo][1]}">${TP[m.tipo][2]}${fmt(m.valor)}</span></div>`).join('')}</div></div>`;
   return h;
 }
+
+function parcelasDe(total,n){ const base=Math.floor(total/n*100)/100; const arr=Array(n).fill(base); arr[0]=r2(total-base*(n-1)); return arr; }
+function compraTemParcela(c){ return (S.cinfo.parcelas||[]).some(p=>p.compraId===c.id || (p.cartao===c.cartao && Math.abs(sum(p.valores)-c.valor)<0.05)); }
+function addParcelaDeCompra(c,tipo){ const n=parseInt(c.parcela)||1; const lst=[...(S.cinfo.parcelas||[]),{id:uid('p'),compraId:c.id,desc:c.desc,cartao:c.cartao,tipo:tipo||'limite',valores:parcelasDe(c.valor,n),pagas:0,obs:''}]; S.cinfo={...S.cinfo,parcelas:lst}; save('cartaoinfo','geral',S.cinfo); }
+function comprasParceladasSoltas(){ const out=[]; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(c=>{ if(c.parcela && !/pago/i.test(c.desc) && !compraTemParcela(c)) out.push(c); })); return out; }
 function parcForm(id){
   const p = id ? (S.cinfo.parcelas||[]).find(x=>x.id===id) : {desc:'',cartao:(S.config.cartoes||['Nubank'])[0],tipo:'limite',valores:[],pagas:0,obs:''};
   const n=p.valores.length||'', vp=p.valores.length?p.valores[p.valores.length-1]:'';
@@ -1241,9 +1248,13 @@ const ACT = {
     const cards=S.config.cartoes||['Nubank'];
     form({title:'Compra no cartão', fields:[
       {name:'desc',label:'Descrição',req:true},
-      {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:defDate()}]},
+      {type:'row',items:[{name:'valor',label:'Valor total da compra',type:'money',req:true},{name:'data',label:'Data',type:'date',value:defDate()}]},
       {type:'row',items:[{name:'cartao',label:'Cartão',type:'select',options:cards,value:UI.cartaoFiltro!=='Todos'?UI.cartaoFiltro:cards[0]},{name:'parcela',label:'Parcelas',type:'select',options:[['','À vista'],...Array.from({length:11},(_,i)=>[(i+2)+'X',(i+2)+'x'])]}]},
-    ], onSubmit:v=>{ const mk=v.data.slice(0,7); const c=S.cartao[mk]?JSON.parse(JSON.stringify(S.cartao[mk])):{mes:mk,compras:[]}; c.compras.push({id:uid('c'),data:v.data,desc:v.desc.trim(),valor:parseNum(v.valor),parcela:v.parcela,cartao:v.cartao}); save('cartao',mk,c); toast('Compra lançada no '+v.cartao); }});
+      {name:'tipo',label:'Se for parcelada',type:'select',options:[['limite','A pagar (vermelho)'],['guardado','Dinheiro já guardado (azul)'],['recorrente','Cai todo mês, não ocupa o limite (preto)']],value:'limite'},
+    ], onSubmit:v=>{ const mk=v.data.slice(0,7); const c=S.cartao[mk]?JSON.parse(JSON.stringify(S.cartao[mk])):{mes:mk,compras:[]}; const cid=uid('c'), val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor';
+      c.compras.push({id:cid,data:v.data,desc:v.desc.trim(),valor:val,parcela:v.parcela,cartao:v.cartao}); save('cartao',mk,c);
+      if(v.parcela){ addParcelaDeCompra({id:cid,desc:v.desc.trim(),valor:val,parcela:v.parcela,cartao:v.cartao},v.tipo); toast('Compra parcelada em '+v.parcela.toLowerCase()+': aparece na aba Parcelas'); }
+      else toast('Compra lançada no '+v.cartao); }});
   },
   'cartoes'(){
     form({title:'Meus cartões', fields:[{name:'lista',label:'Nomes separados por vírgula',value:(S.config.cartoes||[]).join(', ')}], onSubmit:v=>{ const l=v.lista.split(',').map(s=>s.trim()).filter(Boolean); if(!l.length) return 'Informe pelo menos um cartão'; save('config','geral',{...S.config,cartoes:l}); UI.cartaoFiltro='Todos'; }});
@@ -1598,7 +1609,8 @@ document.addEventListener('click', e=>{
   const ix = t.closest('[data-incx]'); if(ix){ UI.incluirCx = ix.dataset.incx==='1'; render(); return; }
   const di = t.closest('[data-del-item]'); if(di){ const o=ensureOrc(UI.month); o.itens=o.itens.filter(i=>i.id!==di.dataset.delItem); save('orcamento',UI.month,o); toast('Item apagado'); return; }
   const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); return; }
-  const dc = t.closest('[data-del-compra]'); if(dc){ const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); toast('Compra apagada'); return; }
+  const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
+  const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
   const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
   const cs = t.closest('[data-cb-status]'); if(cs){ const nx={pendente:'confirmado',confirmado:'resgatado',resgatado:'pendente'}; const m={...S.meliuz,itens:S.meliuz.itens.map(x=>x.id===cs.dataset.cbStatus?{...x,status:nx[x.status]}:x)}; save('meliuz','registro',m); return; }
   const dcb = t.closest('[data-del-cb]'); if(dcb){ save('meliuz','registro',{...S.meliuz,itens:S.meliuz.itens.filter(x=>x.id!==dcb.dataset.delCb)}); return; }
