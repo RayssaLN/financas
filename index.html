@@ -33,14 +33,13 @@ img{max-width:100%}
     let el=document.getElementById('login');
     if(!el){ el=document.createElement('div'); el.id='login'; document.body.appendChild(el); }
     el.innerHTML='<div class="box"><svg width="64" height="64" viewBox="0 0 40 40"><defs><linearGradient id="lgx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b3f8c"/><stop offset="1" stop-color="#d8577e"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#lgx)"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 30V10h7a5.2 5.2 0 0 1 0 10.4h-7"/><path d="M19 20.4l6.5 9.6"/></g><path d="M30 6.5l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2z" fill="#fff"/></svg>'
-      +'<h1>Finanças da Rayssa</h1><p>'+(cfgOk?'Entre com a sua conta Google para ver suas finanças.':'Falta configurar o Firebase: preencha o arquivo firebase-config.js (veja o LEIA-ME).')+'</p>'
+      +'<h1>Finanças</h1><p>'+(cfgOk?'Entre com a sua conta Google para ver suas finanças.':'Falta configurar o Firebase: preencha o arquivo firebase-config.js (veja o LEIA-ME).')+'</p>'
       +(cfgOk?'<button id="btn-google"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Entrar com Google</button>':'')
       +(msg?'<div class="err">'+msg+'</div>':'')+'</div>';
     const b=document.getElementById('btn-google');
     if(b) b.onclick=()=>{ const p=new firebase.auth.GoogleAuthProvider(); firebase.auth().signInWithPopup(p).catch(e=>{ if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment') firebase.auth().signInWithRedirect(p); else loginScreen('Não consegui entrar: '+(e.message||e.code)); }); };
   }
-  function adapter(uid){
-    const root=firebase.firestore().collection('users').doc(uid);
+  function adapterRoot(root){
     const snap=s=>({id:s.id,exists:s.exists,data:()=>s.data()});
     return {
       collection:name=>{ const c=root.collection(name); return {
@@ -50,17 +49,58 @@ img{max-width:100%}
         onSnapshot:(next,err)=>r.onSnapshot(s=>next(snap(s)),err), set:d=>r.set(d), delete:()=>r.delete() }; }
     };
   }
+  const fs=()=>firebase.firestore();
+  const userDoc=uid=>fs().collection('users').doc(uid);
+  let ME=null;
   window.__getDb = () => new Promise(resolve=>{
     if(!cfgOk){ loginScreen(); return; }
     firebase.initializeApp(window.FIREBASE_CONFIG);
-    firebase.firestore().enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    fs().enablePersistence({synchronizeTabs:true}).catch(()=>{});
     let started=false;
-    firebase.auth().onAuthStateChanged(u=>{
+    firebase.auth().onAuthStateChanged(async u=>{
       if(!u){ if(started) location.reload(); else loginScreen(); return; }
       const el=document.getElementById('login'); if(el) el.remove();
-      if(!started){ started=true; resolve(adapter(u.uid)); }
+      if(started) return; started=true;
+      ME={uid:u.uid, nome:(u.displayName||'').split(' ')[0]||'Eu'};
+      try{ const p=await userDoc(u.uid).collection('perfil').doc('info').get(); if(!p.exists||!p.data().nome) await userDoc(u.uid).collection('perfil').doc('info').set({nome:ME.nome},{merge:true}); else ME.nome=p.data().nome; }catch(e){}
+      resolve(adapterRoot(userDoc(u.uid)));
     });
   });
+  /* ---- casal: convite, vínculo e dados compartilhados ---- */
+  const ALF='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const novoCodigo=()=>Array.from(crypto.getRandomValues(new Uint32Array(10)),n=>ALF[n%ALF.length]).join('');
+  window.__couple = {
+    get me(){ return ME; },
+    dbFor: uid => adapterRoot(userDoc(uid)),
+    casalDb: cid => adapterRoot(fs().collection('casais').doc(cid)),
+    onCasal(cb){
+      let unCasal=null, cur=null;
+      userDoc(ME.uid).collection('perfil').doc('info').onSnapshot(s=>{
+        const cid=s.exists?s.data().casalId:null; if(s.exists&&s.data().nome) ME.nome=s.data().nome;
+        if(cid===cur) return; cur=cid; if(unCasal){ unCasal(); unCasal=null; }
+        if(!cid){ cb(null); return; }
+        unCasal=fs().collection('casais').doc(cid).onSnapshot(d=>{
+          const x=d.exists?d.data():null;
+          if(!x||!(x.membros||[]).includes(ME.uid)){ cb(null); return; }
+          cb({cid, membros:x.membros||[], nomes:x.nomes||{}});
+        }, ()=>cb(null));
+      }, ()=>cb(null));
+    },
+    async criar(nome){
+      const cid=novoCodigo();
+      await fs().collection('casais').doc(cid).set({membros:[ME.uid], nomes:{[ME.uid]:nome||ME.nome}, criadoEm:new Date().toISOString()});
+      await userDoc(ME.uid).collection('perfil').doc('info').set({casalId:cid, nome:nome||ME.nome},{merge:true});
+      return cid;
+    },
+    async entrar(cid,nome){
+      await fs().collection('casais').doc(cid).update({membros:firebase.firestore.FieldValue.arrayUnion(ME.uid), ['nomes.'+ME.uid]:nome||ME.nome});
+      await userDoc(ME.uid).collection('perfil').doc('info').set({casalId:cid, nome:nome||ME.nome},{merge:true});
+    },
+    async sair(cid){
+      try{ await fs().collection('casais').doc(cid).update({membros:firebase.firestore.FieldValue.arrayRemove(ME.uid), ['nomes.'+ME.uid]:firebase.firestore.FieldValue.delete()}); }catch(e){}
+      await userDoc(ME.uid).collection('perfil').doc('info').set({casalId:firebase.firestore.FieldValue.delete()},{merge:true});
+    }
+  };
   window.__logout = () => firebase.auth().signOut();
   window.__saveFile = async (name, txt) => {
     const url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
@@ -69,7 +109,7 @@ img{max-width:100%}
   };
 })();
 </script>
-<title>Finanças da Rayssa</title>
+<title>Finanças</title>
 </head>
 <body>
 
@@ -330,6 +370,28 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
   .stat .val{font-size:1.15rem}
   .frow{grid-template-columns:1fr}
 }
+
+/* perfis / casal */
+.pswitch{display:flex;flex-direction:column;gap:4px;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.pswitch h6{margin:0 0 4px;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600}
+.pbtn{display:flex;align-items:center;gap:9px;border:0;background:none;border-radius:9px;padding:6px 8px;font-weight:600;font-size:.88rem;color:var(--ink-2);text-align:left}
+.pbtn:hover{background:var(--surface-2);color:var(--ink)}
+.pbtn[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink)}
+.pbtn .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:.78rem;font-weight:700;flex:none}
+.pbtn small{margin-left:auto;font-size:.68rem;color:var(--muted);font-weight:600}
+.pswitch-m{display:none}
+@media (max-width:760px){
+  .pswitch-m{display:flex;gap:6px;margin:-4px 0 16px;overflow-x:auto}
+  .pswitch-m .pbtn{border:1px solid var(--line);background:var(--surface);flex:none}
+  .pswitch-m .pbtn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+}
+.ro main .quick, .ro main .btn.pri, .ro main .iconbtn, .ro main [data-act="nova-compra"], .ro main .add{display:none!important}
+.ro main input, .ro main select{pointer-events:none;background:transparent!important;border-color:transparent!important}
+.duo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:760px){ .duo{grid-template-columns:1fr} }
+.who{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--ink-2)}
+.who i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.5rem;font-weight:700;letter-spacing:.18em;background:var(--surface-2);border-radius:12px;padding:12px 16px;text-align:center;user-select:all}
 @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
 </style>
 
@@ -337,8 +399,9 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
   <aside class="side" aria-label="Navegação">
     <div class="brand">
       <svg viewBox="0 0 40 40" aria-hidden="true" class="logo"><defs><linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--gold)"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#logo-g)"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 30V10h7a5.2 5.2 0 0 1 0 10.4h-7"/><path d="M19 20.4l6.5 9.6"/></g><path class="spark" d="M30 6.5l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2z" fill="#fff"/><circle cx="31.5" cy="18.5" r="1.3" fill="#fff" opacity=".8"/></svg>
-      <div><b>Finanças</b><small>da Rayssa</small></div>
+      <div><b>Finanças</b><small id="brand-sub">da Rayssa</small></div>
     </div>
+    <div id="perfil-switch" class="pswitch" hidden></div>
     <nav id="sidenav" class="stack" style="gap:18px"></nav>
     <div class="foot stack" style="gap:10px"><button class="navbtn" data-act="cores" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a3 3 0 0 1 0-6h1.5"/></svg>Cores do app</button><button class="navbtn" data-act="backup" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Backup dos dados</button><button class="navbtn" data-act="sair" id="btn-sair" style="padding:6px 0" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sair</button><span class="sync" id="sync"><i></i><span>Conectando…</span></span></div>
   </aside>
@@ -405,7 +468,12 @@ const VIEWS = [
   {g:'Investir', id:'rendimentos', n:'Rendimentos totais', short:'Rendimentos', i:'rend'},
   {g:'Investir', id:'carteira', n:'Análise da carteira', short:'Carteira', i:'carteira'},
 ];
-const BNAV = ['inicio','gastos','cartao','caixinhas'];
+const BNAV_ALL = ['inicio','gastos','cartao','caixinhas'];
+const VIEWS_ALL = VIEWS;
+const VIEWS_CASAL = [
+  {g:'Casal', id:'casal', n:'Visão do casal', short:'Casal', i:'carteira'},
+  {g:'Casal', id:'casal-cx', n:'Caixinhas do casal', short:'Caixinhas', i:'cx'},
+];
 
 const CATS = [
   {k:'fixos', n:'Contas fixas', c:'var(--c1)'},
@@ -446,10 +514,12 @@ const S = { orc:{}, cartao:{}, potes:{}, config:{reservaMeses:6, cartoes:['Nuban
 let db = null, online = false, readonly = false;
 const UI = { view: 'inicio', month: null, cartaoFiltro: 'Todos', incluirCx: true, sim: 0, cTab: 'parcelas' };
 try { const v = localStorage.getItem('fin.view'); if (v && VIEWS.some(x=>x.id===v)) UI.view = v; } catch(e) {}
+UI.perfil='eu';
 const hashV = (location.hash||'').slice(1); if (VIEWS.some(x=>x.id===hashV)) UI.view = hashV;
 
 const queues = {};
 function save(col, id, data){
+  if (readonlyView()) { toast('Você está vendo a tela de '+nomeParceiro()+'. Só '+nomeParceiro()+' pode alterar.'); render(); return; }
   // optimistic local update
   if (col==='orcamento') S.orc[id]=data;
   else if (col==='cartao') S.cartao[id]=data;
@@ -467,11 +537,31 @@ function save(col, id, data){
   });
 }
 function remove(col,id){
+  if (readonlyView()) { toast('Só '+nomeParceiro()+' pode alterar.'); return; }
   if (col==='potes') delete S.potes[id];
   render();
   if (db) db.collection(col).doc(id).delete().catch(()=>toast('Não consegui apagar. Tente de novo.'));
 }
 
+let unsubs=[], VIEW_DB=null;
+function subscribeAll(src){
+  unsubs.forEach(u=>{ try{ u&&u(); }catch(e){} }); unsubs=[];
+  VIEW_DB=src;
+  Object.assign(S,{orc:{},cartao:{},potes:{},config:{reservaMeses:6,cartoes:['Nubank','MP','C6']},meliuz:{itens:[]},cinfo:{parcelas:[],contas:[]},prov:{itens:[],anos:{}},hist:{meses:{},anos:{}},ready:0});
+  UI.month=null; render();
+  const sync = document.getElementById('sync');
+  const done = new Set();
+  const mark = k => { if(!done.has(k)){ done.add(k); S.ready=done.size; if(S.ready>=8){ pickMonth(); } } render(); };
+  const onErr = () => { sync.classList.add('off'); sync.lastElementChild.textContent='Conexão perdida'; };
+  const col=(n,f,k)=>unsubs.push(src.collection(n).onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); f(o); mark(k); }, onErr));
+  const doc=(p,f,k)=>unsubs.push(src.doc(p).onSnapshot(d=>{ if(d.exists) f(d.data()); mark(k); }, onErr));
+  col('orcamento',o=>S.orc=o,'o'); col('cartao',o=>S.cartao=o,'c'); col('potes',o=>S.potes=o,'p');
+  doc('config/geral',d=>{ S.config=Object.assign({reservaMeses:6,cartoes:['Nubank','MP','C6']},d); if(S.config.paleta && !readonlyView()) applyPal(S.config.paleta); },'g');
+  doc('meliuz/registro',d=>S.meliuz=Object.assign({itens:[]},d),'m');
+  doc('proventos/lista',d=>S.prov=Object.assign({itens:[],anos:{}},d),'v');
+  doc('historico/geral',d=>S.hist=Object.assign({meses:{},anos:{}},d),'h');
+  doc('cartaoinfo/geral',d=>S.cinfo=Object.assign({parcelas:[],contas:[]},d),'k');
+}
 async function boot(){
   renderNav();
   let use = null;
@@ -483,17 +573,8 @@ async function boot(){
     S.ready = 8; S.offline = true; pickMonth(); render(); return;
   }
   online = true; sync.lastElementChild.textContent='Salvo na nuvem';
-  const done = new Set();
-  const mark = k => { if(!done.has(k)){ done.add(k); S.ready=done.size; if(S.ready>=8){ pickMonth(); } } render(); };
-  const onErr = () => { sync.classList.add('off'); sync.lastElementChild.textContent='Conexão perdida'; };
-  db.collection('orcamento').onSnapshot(s=>{ const o={}; s.docs.forEach(d=>o[d.id]=d.data()); S.orc=o; mark('o'); }, onErr);
-  db.collection('cartao').onSnapshot(s=>{ const o={}; s.docs.forEach(d=>o[d.id]=d.data()); S.cartao=o; mark('c'); }, onErr);
-  db.collection('potes').onSnapshot(s=>{ const o={}; s.docs.forEach(d=>o[d.id]=d.data()); S.potes=o; mark('p'); }, onErr);
-  db.doc('config/geral').onSnapshot(d=>{ if(d.exists){ S.config=Object.assign({reservaMeses:6,cartoes:['Nubank','MP','C6']},d.data()); if(S.config.paleta) applyPal(S.config.paleta); } mark('g'); }, onErr);
-  db.doc('meliuz/registro').onSnapshot(d=>{ if(d.exists) S.meliuz=Object.assign({itens:[]},d.data()); mark('m'); }, onErr);
-  db.doc('proventos/lista').onSnapshot(d=>{ if(d.exists) S.prov=Object.assign({itens:[],anos:{}},d.data()); mark('v'); }, onErr);
-  db.doc('historico/geral').onSnapshot(d=>{ if(d.exists) S.hist=Object.assign({meses:{},anos:{}},d.data()); mark('h'); }, onErr);
-  db.doc('cartaoinfo/geral').onSnapshot(d=>{ if(d.exists) S.cinfo=Object.assign({parcelas:[],contas:[]},d.data()); mark('k'); }, onErr);
+  subscribeAll(db);
+  if (window.__couple) initCasal();
 }
 
 /* ================= derived ================= */
@@ -563,6 +644,8 @@ function ring(p, big, small){
 /* ================= nav ================= */
 function renderNav(){
   const bs=document.getElementById('btn-sair'); if(bs) bs.hidden=!window.__logout;
+  const VIEWS = UI.perfil==='casal' ? VIEWS_CASAL : VIEWS_ALL, BNAV = UI.perfil==='casal' ? ['casal','casal-cx'] : BNAV_ALL;
+  renderSwitch();
   const groups = [...new Set(VIEWS.map(v=>v.g))];
   document.getElementById('sidenav').innerHTML = groups.map(g=>`<div class="navgroup"><h6>${g}</h6>${VIEWS.filter(v=>v.g===g).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.n}</button>`).join('')}</div>`).join('');
   const inMore = !BNAV.includes(UI.view);
@@ -590,7 +673,7 @@ function vInicio(){
   const ks = Object.keys(S.orc).sort().slice(-8);
   const hr = new Date().getHours();
   const hello = hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite';
-  let h = head(`${hello}, Rayssa`, 'Tudo num lugar só', `Resumo de ${mLabel(mk).toLowerCase()}`, monthPicker());
+  let h = head(readonlyView()?`Finanças de ${esc(nomeParceiro())}`:`${hello}, ${esc(meuNome())}`, 'Tudo num lugar só', `Resumo de ${mLabel(mk).toLowerCase()}`, monthPicker());
   if (S.offline) h += `<div class="banner">Não consegui conectar ao Firebase. Confira a internet e o arquivo firebase-config.js.</div>`;
   h += `<div class="quick">
     <button class="qa" data-act="novo-item">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
@@ -1292,7 +1375,7 @@ const ACT = {
   'apagar-mes'(){
     modal(`<h3>Apagar ${mLabel(UI.month).toLowerCase()}?</h3><p class="sub">As contas e compras no débito deste mês somem do app. As compras no cartão e as caixinhas continuam como estão.</p><div class="foot"><button class="btn ghost" data-close>Cancelar</button><button class="btn pri" style="background:var(--bad)" data-act="apagar-mes-ok">Apagar mês</button></div>`);
   },
-  'apagar-mes-ok'(){ delete S.orc[UI.month]; closeModal(); render(); if(db) db.collection('orcamento').doc(UI.month).delete().catch(()=>toast('Não consegui apagar.')); toast('Mês apagado'); },
+  'apagar-mes-ok'(){ if(readonlyView()) return; delete S.orc[UI.month]; closeModal(); render(); if(db) db.collection('orcamento').doc(UI.month).delete().catch(()=>toast('Não consegui apagar.')); toast('Mês apagado'); },
 };
 function potForm(id, tipo, reserva){
   const p = id? S.potes[id] : {nome:'',tipo,classe:tipo==='caixinha'?'Renda fixa':'Renda fixa',meta:0,cor:POT_COLORS[Object.keys(S.potes).length%POT_COLORS.length],reserva:!!reserva,instituicao:''};
@@ -1331,20 +1414,171 @@ async function exportBackup(){
 }
 let pendingImport=null;
 async function runImport(){
-  const d=pendingImport; pendingImport=null; if(!d||!db){ toast('Sem conexão com o armazenamento'); return; }
+  const d=pendingImport; pendingImport=null; if(readonlyView()){ toast('Volte para a sua tela para importar'); return; } if(!d||!db){ toast('Sem conexão com o armazenamento'); return; }
   closeModal(); toast('Importando…'); let n=0;
   try { for (const [col,docs] of Object.entries(d)) for (const [id,body] of Object.entries(docs||{})) { if(body && typeof body==='object'){ await db.collection(col).doc(id).set(JSON.parse(JSON.stringify(body))); n++; } } toast(n+' registros importados'); }
   catch(e){ toast('A importação parou no meio. Tente de novo.'); }
 }
+
+/* ================= perfis e casal ================= */
+const C = { on:false, me:null, meNome:'', cid:null, casal:null, parc:null, potesDe:{}, cpotes:{}, unsubs:[], ready:false };
+const COR_EU='var(--accent)', COR_PARC='var(--gold)';
+function readonlyView(){ return UI.perfil==='parceiro'; }
+function meuNome(){ return C.meNome || 'Rayssa'; }
+function nomeParceiro(){ return (C.casal && C.casal.nomes && C.casal.nomes[C.parc]) || 'seu amor'; }
+function nomeDe(uid){ return uid===C.me ? meuNome() : nomeParceiro(); }
+function corDe(uid){ return uid===C.me ? COR_EU : COR_PARC; }
+function initCasal(){
+  const cp=window.__couple; C.on=true; C.me=cp.me.uid; C.meNome=cp.me.nome;
+  renderNav();
+  cp.onCasal(info=>{
+    C.unsubs.forEach(u=>{ try{u()}catch(e){} }); C.unsubs=[]; C.potesDe={}; C.cpotes={};
+    C.cid = info ? info.cid : null; C.casal = info; C.parc = info ? (info.membros||[]).find(u=>u!==C.me) || null : null;
+    if (info && info.nomes && info.nomes[C.me]) C.meNome = info.nomes[C.me];
+    if (C.cid){
+      const pot = uid => C.unsubs.push(cp.dbFor(uid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.potesDe[uid]=o; if(UI.perfil==='casal') render(); }, ()=>{}));
+      pot(C.me); if (C.parc) pot(C.parc);
+      C.unsubs.push(cp.casalDb(C.cid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.cpotes=o; if(UI.perfil==='casal') render(); }, ()=>{}));
+    }
+    if (UI.perfil==='parceiro' && !C.parc) setPerfil('eu');
+    C.ready=true; renderNav(); render();
+  });
+}
+function setPerfil(p){
+  if (p==='parceiro' && !C.parc) return;
+  const prev=UI.perfil; UI.perfil=p;
+  document.body.classList.toggle('ro', p==='parceiro');
+  if (p==='parceiro') { subscribeAll(window.__couple.dbFor(C.parc)); if(UI.view.startsWith('casal')) UI.view='inicio'; }
+  else if (p==='eu') { if (VIEW_DB!==db) subscribeAll(db); if(UI.view.startsWith('casal')) UI.view='inicio'; if(S.config.paleta) applyPal(S.config.paleta); }
+  else { UI.view='casal'; if (VIEW_DB!==db) subscribeAll(db); }
+  renderNav(); render(); window.scrollTo(0,0);
+}
+function pbtns(){
+  const b=(p,label,av,col,extra='')=>`<button class="pbtn" data-perfil="${p}" aria-pressed="${UI.perfil===p}"><span class="av" style="background:${col}">${av}</span>${esc(label)}${extra}</button>`;
+  return b('eu',meuNome(),esc(meuNome()[0]||'E').toUpperCase(),COR_EU,'<small>você</small>')
+    + (C.parc? b('parceiro',nomeParceiro(),esc(nomeParceiro()[0]||'P').toUpperCase(),COR_PARC) : '')
+    + b('casal', C.parc?'Casal':'Casal · vincular','♥','linear-gradient(135deg,var(--accent),var(--gold))');
+}
+function renderSwitch(){
+  const el=document.getElementById('perfil-switch'); if(!el) return;
+  el.hidden=!C.on; if(!C.on) return;
+  el.innerHTML='<h6>Ver finanças de</h6>'+pbtns();
+  const sub=document.getElementById('brand-sub'); if(sub) sub.textContent = UI.perfil==='casal' ? 'do casal' : UI.perfil==='parceiro' ? 'de '+nomeParceiro() : 'de '+meuNome();
+}
+function switchMobile(){ return C.on ? `<div class="pswitch-m">${pbtns()}</div>` : ''; }
+
+/* ---- visão do casal ---- */
+function resumoPessoa(potes){
+  const r={reserva:0,caixinhas:0,inv:{},invTot:0};
+  Object.values(potes||{}).forEach(p=>{ const v=potSaldo(p); if(p.tipo==='cartao') return; if(p.reserva) r.reserva+=v; else if(p.tipo==='caixinha') r.caixinhas+=v; else { const k=p.classe||'Outros'; r.inv[k]=(r.inv[k]||0)+v; r.invTot+=v; } });
+  r.total=r.reserva+r.caixinhas+r.invTot; return r;
+}
+function cxCasalList(){ return Object.entries(C.cpotes).map(([id,p])=>({id,...p})).sort((a,b)=>(a.ordem??99)-(b.ordem??99)||a.nome.localeCompare(b.nome)); }
+function cxPorPessoa(p,uid){ return sum((p.movimentos||[]).filter(m=>m.quem===uid),m=>m.tipo==='resgate'?-m.valor:(m.tipo==='aporte'?m.valor:0)); }
+function vincularHtml(){
+  if (C.cid && !C.parc) return `<div class="card" style="max-width:560px"><h2>Convite criado 💌</h2><p class="sub">Mande este código para o seu amor. Ele entra no site com a conta Google dele, abre <b>Casal</b> e digita o código.</p>
+    <div class="code section">${esc(C.cid)}</div>
+    <div class="actions section"><button class="btn pri" data-act="copiar-convite">Copiar código</button><button class="btn ghost" data-act="sair-casal">Cancelar convite</button></div>
+    <p class="note">Quando ele entrar, esta tela vira a visão do casal sozinha.</p></div>`;
+  return `<div class="grid g2" style="max-width:860px">
+    <div class="card"><h2>Criar o nosso casal</h2><p class="sub">Você gera um código e manda para o seu amor.</p>
+      <div class="field section"><label for="meu-nome">Seu nome</label><input id="meu-nome" value="${esc(meuNome())}"></div>
+      <button class="btn pri" data-act="criar-casal">Criar convite</button></div>
+    <div class="card"><h2>Tenho um código</h2><p class="sub">Recebeu um convite? Digite o código aqui.</p>
+      <div class="field section"><label for="codigo-casal">Código do convite</label><input id="codigo-casal" placeholder="EX.: 7K2MQ9XW4P" style="text-transform:uppercase;letter-spacing:.12em"></div>
+      <div class="field"><label for="meu-nome2">Seu nome</label><input id="meu-nome2" value="${esc(meuNome())}"></div>
+      <button class="btn pri" data-act="entrar-casal">Entrar no casal</button></div>
+  </div>
+  <p class="note">Depois de vinculados, cada um vê a tela do outro (sem poder alterar), e as caixinhas do casal ficam sincronizadas para os dois.</p>`;
+}
+function vCasal(){
+  let h = head('Casal', C.parc ? `${esc(meuNome())} & ${esc(nomeParceiro())}` : 'Finanças do casal', C.parc?'Patrimônio dos dois somado e as metas que vocês constroem juntos':'Vincule a sua conta com a do seu amor para ver tudo junto');
+  if (!C.on) return h+'<div class="card empty"><p>A parte do casal funciona na versão do app com login (GitHub Pages).</p></div>';
+  if (!C.parc) return h+vincularHtml();
+  const A=resumoPessoa(C.potesDe[C.me]), B=resumoPessoa(C.potesDe[C.parc]);
+  const cx=cxCasalList(), cxTot=sum(cx,potSaldo);
+  const tot=A.total+B.total+cxTot;
+  const cls=[...new Set([...Object.keys(A.inv),...Object.keys(B.inv)])];
+  const linhas=[['Reserva de emergência',A.reserva,B.reserva],['Caixinhas pessoais',A.caixinhas,B.caixinhas],...cls.map(k=>[k==='Renda fixa'?'Renda Fixa':k,A.inv[k]||0,B.inv[k]||0])];
+  h += `<div class="duo">
+    <div class="card stat hero"><div class="lbl">Patrimônio do casal</div><div class="val">${fmt(tot)}</div><div class="ft">Os dois + caixinhas do casal</div></div>
+    <div class="card stat"><div class="lbl"><span class="who"><i style="background:${COR_EU}"></i>${esc(meuNome())}</span></div><div class="val sm">${fmt(A.total)}</div><div class="ft">${pct(tot?A.total/tot:0)} do total</div></div>
+    <div class="card stat"><div class="lbl"><span class="who"><i style="background:${COR_PARC}"></i>${esc(nomeParceiro())}</span></div><div class="val sm">${fmt(B.total)}</div><div class="ft">${pct(tot?B.total/tot:0)} do total</div></div>
+  </div>`;
+  h += `<div class="card section"><div class="card-h"><div><h2>Quem tem o quê</h2><p>Soma das reservas, caixinhas e investimentos de cada um</p></div></div>
+    <div class="alloc" style="height:14px;margin-bottom:14px"><i style="width:${tot?A.total/tot*100:0}%;background:${COR_EU}" data-tip="${esc(meuNome())}: ${esc(fmt(A.total))}"></i><i style="width:${tot?B.total/tot*100:0}%;background:${COR_PARC}" data-tip="${esc(nomeParceiro())}: ${esc(fmt(B.total))}"></i><i style="width:${tot?cxTot/tot*100:0}%;background:var(--ink-2)" data-tip="Caixinhas do casal: ${esc(fmt(cxTot))}"></i></div>
+    <div class="tbl-wrap"><table><thead><tr><th></th><th class="r">${esc(meuNome())}</th><th class="r">${esc(nomeParceiro())}</th><th class="r">Juntos</th></tr></thead><tbody>
+    ${linhas.filter(l=>l[1]||l[2]).map(l=>`<tr><td>${esc(l[0])}</td><td class="r">${fmt(l[1])}</td><td class="r">${fmt(l[2])}</td><td class="r"><b>${fmt(l[1]+l[2])}</b></td></tr>`).join('')}
+    <tr><td>Caixinhas do casal</td><td class="r muted">${fmt(sum(cx,p=>cxPorPessoa(p,C.me)))}</td><td class="r muted">${fmt(sum(cx,p=>cxPorPessoa(p,C.parc)))}</td><td class="r"><b>${fmt(cxTot)}</b></td></tr>
+    </tbody><tfoot><tr><td>Total</td><td class="r">${fmt(A.total+sum(cx,p=>cxPorPessoa(p,C.me)))}</td><td class="r">${fmt(B.total+sum(cx,p=>cxPorPessoa(p,C.parc)))}</td><td class="r">${fmt(tot)}</td></tr></tfoot></table></div>
+    <p class="note">Nas caixinhas do casal, a coluna de cada um mostra quanto cada um guardou. Os rendimentos entram só no total.</p></div>`;
+  h += `<div class="card section"><div class="card-h"><div><h2>Caixinhas do casal</h2><p>${cx.length} metas juntos</p></div><button class="btn sm pri" data-go="casal-cx">Ver caixinhas →</button></div>
+    ${cx.length?`<div class="rows">${cx.map(p=>{const v=potSaldo(p),m=+p.meta||0; return `<div class="row"><i class="dot" style="background:${esc(p.cor)}"></i><div class="grow"><div class="t">${esc(p.nome)}</div>${m?`<div class="bar" style="margin-top:6px;height:6px"><i style="width:${Math.min(100,v/m*100)}%;background:${esc(p.cor)}"></i></div>`:''}</div><span class="muted num" style="font-size:.8rem">${m?pct(v/m)+' de '+fmt(m):''}</span><span class="v">${fmt(v)}</span></div>`;}).join('')}</div>`:`<div class="empty"><p>Nenhuma caixinha do casal ainda. Que tal começar pela próxima viagem?</p><button class="btn pri" data-act="nova-cx-casal">Criar caixinha do casal</button></div>`}</div>`;
+  h += `<div class="actions section" style="justify-content:flex-end"><button class="btn ghost danger sm" data-act="sair-casal">Desfazer vínculo do casal</button></div>`;
+  return h;
+}
+function vCasalCx(){
+  let h = head('Casal','Caixinhas do casal','Metas que vocês constroem juntos', C.parc?`<button class="btn pri" data-act="nova-cx-casal">${svg('plus')}Nova caixinha</button>`:'');
+  if (!C.parc) return h+vincularHtml();
+  const cx=cxCasalList();
+  h += `<div class="pots">${cx.map(p=>{ const v=potSaldo(p), m=+p.meta||0, a=cxPorPessoa(p,C.me), b=cxPorPessoa(p,C.parc);
+    return `<button class="pot" data-cxc="${p.id}"><div class="top-row"><span class="name"><i class="dot" style="background:${esc(p.cor)}"></i>${esc(p.nome)}</span></div><div class="val">${fmt(v)}</div>
+      ${m?`<div class="bar"><i style="width:${Math.min(100,v/m*100)}%;background:${esc(p.cor)}"></i></div><div class="meta"><span>${pct(v/m)} da meta</span><span>${fmt(m)}</span></div>`:''}
+      <div class="meta"><span class="who"><i style="background:${COR_EU}"></i>${esc(meuNome())} ${fmt(a)}</span><span class="who"><i style="background:${COR_PARC}"></i>${esc(nomeParceiro())} ${fmt(b)}</span></div></button>`; }).join('')}
+    <button class="pot new" data-act="nova-cx-casal">+ Nova caixinha do casal</button></div>`;
+  return h;
+}
+function openCxCasal(id){
+  const p=C.cpotes[id]; if(!p) return;
+  const movs=[...(p.movimentos||[])].sort((a,b)=>b.data.localeCompare(a.data));
+  const TP={aporte:['Guardou','pos','+'],resgate:['Retirou','neg','−'],rendimento:['Rendimento','pos','+']};
+  modal(`<h3><i class="dot" style="background:${esc(p.cor)};width:12px;height:12px"></i> ${esc(p.nome)}</h3>
+    <div class="grid g3" style="gap:10px;margin-bottom:14px"><div class="stat"><div class="lbl">Saldo</div><div class="val sm">${fmt(potSaldo(p))}</div></div><div class="stat"><div class="lbl">${esc(meuNome())}</div><div class="val sm">${fmt(cxPorPessoa(p,C.me))}</div></div><div class="stat"><div class="lbl">${esc(nomeParceiro())}</div><div class="val sm">${fmt(cxPorPessoa(p,C.parc))}</div></div></div>
+    ${+p.meta?`<div class="bar" style="margin-bottom:6px"><i style="width:${Math.min(100,potSaldo(p)/p.meta*100)}%;background:${esc(p.cor)}"></i></div><p class="note" style="margin:0 0 12px">${pct(potSaldo(p)/p.meta)} da meta de ${fmt(p.meta)} · faltam ${fmt(Math.max(0,p.meta-potSaldo(p)))}</p>`:''}
+    <div class="actions" style="margin-bottom:12px"><button class="btn pri sm" data-act="mov-cx-casal" data-id="${id}">${svg('plus')}Movimentar</button><button class="btn sm ghost" data-act="editar-cx-casal" data-id="${id}">Editar</button></div>
+    <div class="rows">${movs.map(m=>`<div class="row">${dBox(m.data)}<div class="grow"><div class="t">${TP[m.tipo][0]}${m.tipo!=='rendimento'?` · <span class="who"><i style="background:${corDe(m.quem)}"></i>${esc(nomeDe(m.quem))}</span>`:''}</div>${m.obs?`<div class="s">${esc(m.obs)}</div>`:''}</div><span class="v ${TP[m.tipo][1]}">${TP[m.tipo][2]}${fmt(m.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-mov-casal="${m.id}" data-id="${id}">${svg('trash')}</button></div>`).join('')||'<p class="muted">Sem movimentações ainda.</p>'}</div>
+    <div class="foot"><button class="btn" data-close>Fechar</button></div>`, true);
+}
+function saveCasal(id,data){ C.cpotes[id]=data; render(); window.__couple.casalDb(C.cid).collection('potes').doc(id).set(JSON.parse(JSON.stringify(data))).catch(()=>toast('Não consegui salvar. Tente de novo.')); }
+Object.assign(ACT, {
+  'criar-casal'(){ const n=(document.getElementById('meu-nome')||{}).value||meuNome(); window.__couple.criar(n.trim()).then(()=>toast('Convite criado')).catch(e=>toast('Não consegui criar: '+(e.message||e.code||e))); },
+  'entrar-casal'(){ const c=((document.getElementById('codigo-casal')||{}).value||'').trim().toUpperCase(); const n=((document.getElementById('meu-nome2')||{}).value||meuNome()).trim(); if(!c) return toast('Digite o código'); window.__couple.entrar(c,n).then(()=>toast('Vocês estão vinculados 💜')).catch(e=>toast(e&&e.code==='not-found'?'Código não encontrado':e&&e.code==='permission-denied'?'Esse convite já foi usado ou não existe':'Não consegui entrar: '+(e.message||e))); },
+  'copiar-convite'(){ const t=C.cid; try{ navigator.clipboard.writeText(t).then(()=>toast('Código copiado'),()=>toast('Selecione o código e copie')); }catch(e){ toast('Selecione o código e copie'); } },
+  'sair-casal'(){ modal(`<h3>Desfazer o vínculo?</h3><p class="sub">Vocês deixam de ver as telas um do outro. As caixinhas do casal continuam guardadas no convite, mas você perde o acesso a elas.</p><div class="foot"><button class="btn ghost" data-close>Cancelar</button><button class="btn pri" style="background:var(--bad)" data-act="sair-casal-ok">Desfazer</button></div>`); },
+  'sair-casal-ok'(){ window.__couple.sair(C.cid).then(()=>{ setPerfil('casal'); toast('Vínculo desfeito'); }).catch(()=>toast('Não consegui desfazer agora')); },
+  'nova-cx-casal'(){ cxCasalForm(null); },
+  'editar-cx-casal'(d){ cxCasalForm(d.id); },
+  'mov-cx-casal'(d){ const p=C.cpotes[d.id];
+    form({title:'Movimentar · '+p.nome, fields:[
+      {name:'quem',label:'Quem',type:'seg',options:[[C.me,meuNome()],[C.parc,nomeParceiro()]],value:C.me},
+      {name:'tipo',label:'Tipo',type:'seg',options:[['aporte','Guardar'],['resgate','Retirar'],['rendimento','Rendimento']],value:'aporte'},
+      {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
+      {name:'obs',label:'Observação (opcional)'}],
+    onSubmit:v=>{ const val=parseNum(v.valor); if(!val) return 'Informe um valor'; const q=JSON.parse(JSON.stringify(p)); q.movimentos=q.movimentos||[]; q.movimentos.push({id:uid('m'),data:v.data,tipo:v.tipo,valor:val,quem:v.quem,obs:v.obs.trim()}); saveCasal(d.id,q); setTimeout(()=>openCxCasal(d.id),30); toast('Salvo na caixinha do casal'); }});
+  },
+});
+function cxCasalForm(id){
+  const p = id ? C.cpotes[id] : {nome:'',meta:0,cor:POT_COLORS[Object.keys(C.cpotes).length%POT_COLORS.length]};
+  form({title:id?'Editar '+p.nome:'Nova caixinha do casal', fields:[
+    {name:'nome',label:'Nome (ex.: Viagem, Nossa casa, Casamento)',req:true,value:p.nome},
+    {type:'row',items:[{name:'meta',label:'Meta (opcional)',type:'money',value:p.meta?r2(p.meta).toLocaleString('pt-BR',{minimumFractionDigits:2}):''},{name:'cor',label:'Cor',type:'select',options:POT_COLORS.map((c,i)=>[c,['Verde','Azul','Dourado','Roxo','Rosa','Laranja','Menta','Vermelho'][i]]),value:p.cor}]}],
+  extra: id?`<div class="confirm"><span style="flex:1">Apagar esta caixinha do casal?</span><button type="button" class="btn sm danger" data-act="apagar-cx-casal" data-id="${id}">Apagar</button></div>`:'',
+  onSubmit:v=>{ const q={...(id?JSON.parse(JSON.stringify(p)):{movimentos:[],ordem:Object.keys(C.cpotes).length}),nome:v.nome.trim(),meta:parseNum(v.meta),cor:v.cor}; const nid=id||uid('cx'); saveCasal(nid,q); toast(id?'Salvo':'Caixinha do casal criada'); }});
+}
+ACT['apagar-cx-casal']=d=>{ delete C.cpotes[d.id]; render(); window.__couple.casalDb(C.cid).collection('potes').doc(d.id).delete(); toast('Apagada'); };
 /* ================= events ================= */
 document.addEventListener('click', e=>{
   const t = e.target;
+  const pf = t.closest('[data-perfil]'); if(pf){ document.getElementById('more').classList.remove('open'); setPerfil(pf.dataset.perfil); return; }
+  const cxc = t.closest('[data-cxc]'); if(cxc){ openCxCasal(cxc.dataset.cxc); return; }
+  const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
   const goB = t.closest('[data-go]'); if(goB){ go(goB.dataset.go); return; }
   if(t.closest('[data-more]')){ document.getElementById('more').classList.toggle('open'); return; }
   if(t.id==='more'){ t.classList.remove('open'); return; }
   if(t.closest('[data-close]') || t.matches('[data-scrim]')){ closeModal(); return; }
   const mn = t.closest('[data-mnav]'); if(mn){ UI.month=addMonth(UI.month,+mn.dataset.mnav); render(); return; }
   const act = t.closest('[data-act]');
+  if(act && readonlyView() && !['cores','backup','exportar','sair'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
   if(act){
     e.preventDefault();
     if(act.dataset.act==='apagar-pote'){ const id=act.dataset.pote; closeModal(); remove('potes',id); toast('Apagado'); return; }
@@ -1400,12 +1634,14 @@ let toastT; function toast(msg){ let el=document.querySelector('.toast'); if(!el
 /* ================= render ================= */
 function render(){
   const main=document.getElementById('main');
-  if(S.ready<8){ main.innerHTML='<div class="loading">Carregando suas finanças…</div>'; return; }
+  if(S.ready<8 && !(UI.perfil==='casal')){ main.innerHTML=switchMobile()+'<div class="loading">Carregando…</div>'; return; }
   pickMonth();
   // keep focus on inline inputs across re-render
   const ae=document.activeElement; const key = ae && ae.id ? '#'+ae.id : (ae && ae.dataset && ae.dataset.item ? `[data-item="${ae.dataset.item}"][data-f="${ae.dataset.f}"]` : null);
-  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz};
-  main.innerHTML = (V[UI.view]||vInicio)();
+  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz,casal:vCasal,'casal-cx':vCasalCx};
+  if(UI.perfil==='casal' && !UI.view.startsWith('casal')) UI.view='casal';
+  if(UI.perfil!=='casal' && UI.view.startsWith('casal')) UI.view='inicio';
+  main.innerHTML = switchMobile() + (readonlyView()?`<div class="banner" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span>👀 Você está vendo as finanças de <b>${esc(nomeParceiro())}</b>. Só ${esc(nomeParceiro())} pode alterar.</span><button class="btn sm" data-perfil="eu">Voltar para as minhas</button></div>`:'') + (V[UI.view]||vInicio)();
   if(key && main.contains(ae)===false){ const n=main.querySelector(key); if(n && document.getElementById('modal-root').children.length===0) n.focus(); }
 }
 boot();
