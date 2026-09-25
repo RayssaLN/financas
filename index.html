@@ -1447,8 +1447,6 @@ function initCasal(){
     C.cid = info ? info.cid : null; C.casal = info; C.parc = info ? (info.membros||[]).find(u=>u!==C.me) || null : null;
     if (info && info.nomes && info.nomes[C.me]) C.meNome = info.nomes[C.me];
     if (C.cid){
-      const pot = uid => C.unsubs.push(cp.dbFor(uid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.potesDe[uid]=o; if(UI.perfil==='casal') render(); }, ()=>{}));
-      pot(C.me); if (C.parc) pot(C.parc);
       C.unsubs.push(cp.casalDb(C.cid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.cpotes=o; if(UI.perfil==='casal') render(); }, ()=>{}));
     }
     if (UI.perfil==='parceiro' && !C.parc) setPerfil('eu');
@@ -1503,29 +1501,29 @@ function vincularHtml(){
   <p class="note">Depois de vinculados, cada um vê a tela do outro (sem poder alterar), e as caixinhas do casal ficam sincronizadas para os dois.</p>`;
 }
 function vCasal(){
-  let h = head('Casal', C.parc ? `${esc(meuNome())} & ${esc(nomeParceiro())}` : 'Finanças do casal', C.parc?'Patrimônio dos dois somado e as metas que vocês constroem juntos':'Vincule a sua conta com a do seu amor para ver tudo junto');
+  let h = head('Casal', C.parc ? `${esc(meuNome())} & ${esc(nomeParceiro())}` : 'Finanças do casal', C.parc?'O dinheiro de vocês dois é o que está nas caixinhas do casal':'Vincule a sua conta com a do seu amor para montar as caixinhas de vocês', C.parc?`<button class="btn pri" data-act="nova-cx-casal">${svg('plus')}Nova caixinha</button>`:'');
   if (!C.on) return h+'<div class="card empty"><p>A parte do casal funciona na versão do app com login (GitHub Pages).</p></div>';
   if (!C.parc) return h+vincularHtml();
-  const A=resumoPessoa(C.potesDe[C.me]), B=resumoPessoa(C.potesDe[C.parc]);
-  const cx=cxCasalList(), cxTot=sum(cx,potSaldo);
-  const tot=A.total+B.total+cxTot;
-  const cls=[...new Set([...Object.keys(A.inv),...Object.keys(B.inv)])];
-  const linhas=[['Reserva de emergência',A.reserva,B.reserva],['Caixinhas pessoais',A.caixinhas,B.caixinhas],...cls.map(k=>[k==='Renda fixa'?'Renda Fixa':k,A.inv[k]||0,B.inv[k]||0])];
-  h += `<div class="duo">
-    <div class="card stat hero"><div class="lbl">Patrimônio do casal</div><div class="val">${fmt(tot)}</div><div class="ft">Os dois + caixinhas do casal</div></div>
-    <div class="card stat"><div class="lbl"><span class="who"><i style="background:${COR_EU}"></i>${esc(meuNome())}</span></div><div class="val sm">${fmt(A.total)}</div><div class="ft">${pct(tot?A.total/tot:0)} do total</div></div>
-    <div class="card stat"><div class="lbl"><span class="who"><i style="background:${COR_PARC}"></i>${esc(nomeParceiro())}</span></div><div class="val sm">${fmt(B.total)}</div><div class="ft">${pct(tot?B.total/tot:0)} do total</div></div>
+  const cx=cxCasalList(), tot=sum(cx,potSaldo);
+  const a=sum(cx,p=>cxPorPessoa(p,C.me)), b=sum(cx,p=>cxPorPessoa(p,C.parc));
+  const rend=sum(cx,p=>sum((p.movimentos||[]).filter(m=>m.tipo==='rendimento'),m=>m.valor));
+  const meta=sum(cx,p=>+p.meta||0);
+  h += `<div class="grid g4">
+    <div class="card stat hero"><div class="lbl">Dinheiro do casal</div><div class="val">${fmt(tot)}</div><div class="ft">${cx.length} ${cx.length===1?'caixinha':'caixinhas'}${meta?` · ${pct(tot/meta)} das metas`:''}</div></div>
+    <div class="card stat"><div class="lbl"><span class="who"><i style="background:${COR_EU}"></i>${esc(meuNome())} colocou</span></div><div class="val sm">${fmt(a)}</div><div class="ft">${a+b?pct(a/(a+b)):'—'} do que foi guardado</div></div>
+    <div class="card stat"><div class="lbl"><span class="who"><i style="background:${COR_PARC}"></i>${esc(nomeParceiro())} colocou</span></div><div class="val sm">${fmt(b)}</div><div class="ft">${a+b?pct(b/(a+b)):'—'} do que foi guardado</div></div>
+    <div class="card stat"><div class="lbl">Rendeu</div><div class="val sm pos">${fmt(rend)}</div><div class="ft">Rendimentos das caixinhas</div></div>
   </div>`;
-  h += `<div class="card section"><div class="card-h"><div><h2>Quem tem o quê</h2><p>Soma das reservas, caixinhas e investimentos de cada um</p></div></div>
-    <div class="alloc" style="height:14px;margin-bottom:14px"><i style="width:${tot?A.total/tot*100:0}%;background:${COR_EU}" data-tip="${esc(meuNome())}: ${esc(fmt(A.total))}"></i><i style="width:${tot?B.total/tot*100:0}%;background:${COR_PARC}" data-tip="${esc(nomeParceiro())}: ${esc(fmt(B.total))}"></i><i style="width:${tot?cxTot/tot*100:0}%;background:var(--ink-2)" data-tip="Caixinhas do casal: ${esc(fmt(cxTot))}"></i></div>
-    <div class="tbl-wrap"><table><thead><tr><th></th><th class="r">${esc(meuNome())}</th><th class="r">${esc(nomeParceiro())}</th><th class="r">Juntos</th></tr></thead><tbody>
-    ${linhas.filter(l=>l[1]||l[2]).map(l=>`<tr><td>${esc(l[0])}</td><td class="r">${fmt(l[1])}</td><td class="r">${fmt(l[2])}</td><td class="r"><b>${fmt(l[1]+l[2])}</b></td></tr>`).join('')}
-    <tr><td>Caixinhas do casal</td><td class="r muted">${fmt(sum(cx,p=>cxPorPessoa(p,C.me)))}</td><td class="r muted">${fmt(sum(cx,p=>cxPorPessoa(p,C.parc)))}</td><td class="r"><b>${fmt(cxTot)}</b></td></tr>
-    </tbody><tfoot><tr><td>Total</td><td class="r">${fmt(A.total+sum(cx,p=>cxPorPessoa(p,C.me)))}</td><td class="r">${fmt(B.total+sum(cx,p=>cxPorPessoa(p,C.parc)))}</td><td class="r">${fmt(tot)}</td></tr></tfoot></table></div>
-    <p class="note">Nas caixinhas do casal, a coluna de cada um mostra quanto cada um guardou. Os rendimentos entram só no total.</p></div>`;
-  h += `<div class="card section"><div class="card-h"><div><h2>Caixinhas do casal</h2><p>${cx.length} metas juntos</p></div><button class="btn sm pri" data-go="casal-cx">Ver caixinhas →</button></div>
-    ${cx.length?`<div class="rows">${cx.map(p=>{const v=potSaldo(p),m=+p.meta||0; return `<div class="row"><i class="dot" style="background:${esc(p.cor)}"></i><div class="grow"><div class="t">${esc(p.nome)}</div>${m?`<div class="bar" style="margin-top:6px;height:6px"><i style="width:${Math.min(100,v/m*100)}%;background:${esc(p.cor)}"></i></div>`:''}</div><span class="muted num" style="font-size:.8rem">${m?pct(v/m)+' de '+fmt(m):''}</span><span class="v">${fmt(v)}</span></div>`;}).join('')}</div>`:`<div class="empty"><p>Nenhuma caixinha do casal ainda. Que tal começar pela próxima viagem?</p><button class="btn pri" data-act="nova-cx-casal">Criar caixinha do casal</button></div>`}</div>`;
-  h += `<div class="actions section" style="justify-content:flex-end"><button class="btn ghost danger sm" data-act="sair-casal">Desfazer vínculo do casal</button></div>`;
+  if (a+b>0) h += `<div class="card section"><div class="card-h"><div><h2>Quem colocou quanto</h2><p>Soma do que cada um guardou nas caixinhas do casal</p></div></div>
+    <div class="alloc" style="height:16px"><i style="width:${a/(a+b)*100}%;background:${COR_EU}" data-tip="${esc(meuNome())}: ${esc(fmt(a))}"></i><i style="width:${b/(a+b)*100}%;background:${COR_PARC}" data-tip="${esc(nomeParceiro())}: ${esc(fmt(b))}"></i></div>
+    <div class="legend"><span><i class="dot" style="background:${COR_EU}"></i>${esc(meuNome())} ${fmt(a)}</span><span><i class="dot" style="background:${COR_PARC}"></i>${esc(nomeParceiro())} ${fmt(b)}</span></div></div>`;
+  h += `<div class="card section"><div class="card-h"><div><h2>Caixinhas do casal</h2><p>Metas que vocês constroem juntos</p></div><button class="btn sm ghost" data-go="casal-cx">Ver todas →</button></div>
+    ${cx.length?`<div class="rows">${cx.map(p=>{const v=potSaldo(p),m=+p.meta||0; return `<div class="row" data-cxc="${p.id}" style="cursor:pointer"><i class="dot" style="background:${esc(p.cor)}"></i><div class="grow"><div class="t">${esc(p.nome)}</div><div class="s"><span class="who"><i style="background:${COR_EU}"></i>${fmt(cxPorPessoa(p,C.me))}</span> &nbsp; <span class="who"><i style="background:${COR_PARC}"></i>${fmt(cxPorPessoa(p,C.parc))}</span></div>${m?`<div class="bar" style="margin-top:6px;height:6px"><i style="width:${Math.min(100,v/m*100)}%;background:${esc(p.cor)}"></i></div>`:''}</div><span class="muted num" style="font-size:.8rem">${m?pct(v/m)+' de '+fmt(m):''}</span><span class="v">${fmt(v)}</span></div>`;}).join('')}</div>`:`<div class="empty"><p>Nenhuma caixinha do casal ainda. Que tal começar pela próxima viagem?</p><button class="btn pri" data-act="nova-cx-casal">Criar caixinha do casal</button></div>`}</div>`;
+  const movs=[]; cx.forEach(p=>(p.movimentos||[]).forEach(m=>movs.push({...m,cx:p.nome,cor:p.cor})));
+  movs.sort((x,y)=>y.data.localeCompare(x.data));
+  if (movs.length) h += `<div class="card section"><div class="card-h"><div><h2>Últimas movimentações</h2></div></div><div class="rows">${movs.slice(0,8).map(m=>`<div class="row">${dBox(m.data)}<div class="grow"><div class="t">${m.tipo==='aporte'?'Guardou':m.tipo==='resgate'?'Retirou':'Rendimento'} · ${esc(m.cx)}</div><div class="s">${m.tipo!=='rendimento'?`<span class="who"><i style="background:${corDe(m.quem)}"></i>${esc(nomeDe(m.quem))}</span>`:''}${m.obs?' · '+esc(m.obs):''}</div></div><span class="v ${m.tipo==='resgate'?'neg':'pos'}">${m.tipo==='resgate'?'−':'+'}${fmt(m.valor)}</span></div>`).join('')}</div></div>`;
+  h += `<p class="note">O dinheiro pessoal de cada um continua só na tela de cada um. Aqui entra apenas o que vocês colocam nas caixinhas do casal.</p>
+    <div class="actions section" style="justify-content:flex-end"><button class="btn ghost danger sm" data-act="sair-casal">Desfazer vínculo do casal</button></div>`;
   return h;
 }
 function vCasalCx(){
