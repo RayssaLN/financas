@@ -1499,7 +1499,7 @@ async function exportBackup(){
   try { await saveFile('financas-backup-'+todayISO()+'.json', JSON.stringify(data,null,1)); toast('Backup salvo'); }
   catch(e){ if(e && e.code==='declined') return; toast('Não consegui salvar o arquivo aqui'); }
 }
-let pendingImport=null;
+let pendingImport=null, pendingCasal=null;
 function mergeDoc(old, neu){
   const clean=o=>{ const x={...o}; delete x.__drop; return x; };
   if(!old) return clean(neu);
@@ -1512,7 +1512,20 @@ function mergeDoc(old, neu){
   if (drop) for (const [k,re] of Object.entries(drop)) if(!(k in neu) && Array.isArray(out[k])) out[k]=out[k].filter(x=>!(x&&new RegExp(re).test(String(x.id))));
   return out;
 }
+function importarFundoCasal(pc){
+  if(!pc||!pc.fundo) return 0;
+  if(!C.cid||!C.parc){ toast('Vincule o casal primeiro para trazer o controle do Alelo'); return 0; }
+  const f = C.fundo ? JSON.parse(JSON.stringify(C.fundo)) : {carteiras:[{id:'alelo',nome:'Alelo '+meuNome(),dono:C.me,tipo:'alelo',padrao:0},{id:'dinheiro',nome:'VR '+nomeParceiro()+' (dinheiro)',dono:C.parc,tipo:'dinheiro',padrao:0}],lancamentos:[]};
+  const al=f.carteiras.find(c=>c.tipo==='alelo')||f.carteiras[0];
+  const novos=(pc.fundo.lancamentos||[]).map(l=>({...l,carteira:l.carteira==='@alelo'?al.id:l.carteira,quem:l.quem||al.dono}));
+  const ids=new Set(novos.map(l=>l.id));
+  const temIni=novos.some(l=>l.inicial&&l.carteira===al.id);
+  f.lancamentos=[...(f.lancamentos||[]).filter(l=>!ids.has(l.id) && !(temIni && l.inicial && l.carteira===al.id)), ...novos];
+  saveFundo(f); return novos.length;
+}
 async function runImport(modo){
+  const nc=importarFundoCasal(pendingCasal); pendingCasal=null;
+  if(nc && !Object.keys(pendingImport||{}).length){ pendingImport=null; closeModal(); toast(nc+' lançamentos do Alelo no Fundo do rolê'); return; }
   const d=pendingImport; pendingImport=null; if(readonlyView()){ toast('Volte para a sua tela para importar'); return; } if(!d||!db){ toast('Sem conexão com o armazenamento'); return; }
   closeModal(); toast('Importando…'); let n=0; const atual=BACKUP_COLS();
   try { for (const [col,docs] of Object.entries(d)) for (const [id,body] of Object.entries(docs||{})) { if(body && typeof body==='object'){ const old=(atual[col]||{})[id]; const fim = modo==='substituir' ? mergeDoc(null,body) : mergeDoc(old && Object.keys(old).length?old:null, body); await db.collection(col).doc(id).set(JSON.parse(JSON.stringify(fim))); n++; } } toast(n+' registros atualizados'); }
@@ -1739,6 +1752,9 @@ function vRole(){
     <div class="card"><div class="card-h"><div><h2>Onde vocês gastaram em ${mShort(mk)}</h2></div></div>${byC.length?`<div class="rows">${byC.map(x=>`<div class="row" style="padding:7px 0"><span style="font-size:1.1rem">${x.e}</span><div class="grow"><div class="t">${x.n}</div><div class="bar" style="margin-top:5px;height:6px"><i style="width:${gMes?x.v/gMes*100:0}%"></i></div></div><span class="v">${fmt(x.v)}</span></div>`).join('')}</div>`:'<p class="muted">Nenhum gasto neste mês ainda.</p>'}</div>
     <div class="card"><div class="card-h"><div><h2>Gastos por mês</h2><p>Por carteira</p></div></div>${ms.length?barChart({labels:ms.map(mShort),series:ser,stacked:true,h:180})+legend(ser):'<p class="muted">Sem dados ainda.</p>'}</div>
   </div>`;
+  const mm=[...new Set(L.map(l=>l.data.slice(0,7)))].sort();
+  if (mm.length>1){ let acc=0; const rows=mm.map(m=>{ const e=sum(L.filter(l=>l.tipo==='entrada'&&!l.inicial&&l.data.startsWith(m)),l=>l.valor), ini=sum(L.filter(l=>l.tipo==='entrada'&&l.inicial&&l.data.startsWith(m)),l=>l.valor), g=sum(L.filter(l=>l.tipo==='gasto'&&l.data.startsWith(m)),l=>l.valor); const antes=acc+ini; acc=antes+e-g; return {m,antes,e,g,fim:acc}; }).reverse();
+    h += `<div class="card section"><div class="card-h"><div><h2>Mês a mês</h2><p>Como a aba GERAL da sua planilha: quanto entrou, quanto foi gasto e quanto sobrou</p></div></div><div class="tbl-wrap"><table><thead><tr><th>Mês</th><th class="r">Saldo inicial</th><th class="r">Entrou</th><th class="r">Gastou</th><th class="r">Saldo final</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${mShort(r.m)}/${r.m.slice(2,4)}</td><td class="r muted">${fmt(r.antes)}</td><td class="r pos">+${fmt(r.e)}</td><td class="r neg">−${fmt(r.g)}</td><td class="r"><b class="${r.fim<0?'neg':''}">${fmt(r.fim)}</b>${r.g>r.e?' <span class="pill warn" title="Gastou mais do que entrou no mês">↓</span>':''}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td></td><td class="r">+${fmt(sum(rows,r=>r.e))}</td><td class="r">−${fmt(sum(rows,r=>r.g))}</td><td class="r">${fmt(acc)}</td></tr></tfoot></table></div></div>`; }
   h += `<div class="card section"><div class="card-h"><div><h2>Lançamentos</h2><p>${L.length} no total</p></div><button class="btn sm ghost" data-act="role-config">Carteiras</button></div>
     ${L.length?`<div class="rows">${L.slice(0,UI.roleAll?999:20).map(l=>{const c=cs.find(x=>x.id===l.carteira)||{}; const cat=ROLE_CAT[l.cat]; return `<div class="row">${dBox(l.data)}<div class="grow"><div class="t">${l.tipo==='entrada'?(l.inicial?'Saldo inicial':'Entrou VR'):(cat?cat[2]+' ':'')+esc(l.desc||cat&&cat[1]||'Gasto')}</div><div class="s">${ic(c)} ${esc(c.nome||'')} · <span class="who"><i style="background:${corDe(l.quem)}"></i>${esc(nomeDe(l.quem))}</span>${l.dica?' · <span style="color:var(--gold)">dava pra usar o Alelo</span>':''}</div></div><span class="v ${l.tipo==='entrada'?'pos':''}">${l.tipo==='entrada'?'+':'−'}${fmt(l.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-role="${l.id}">${svg('trash')}</button></div>`;}).join('')}</div>${L.length>20&&!UI.roleAll?`<button class="btn sm ghost" data-roleall>Ver todos (${L.length})</button>`:''}`:'<p class="muted">Lance o VR que entrou e os gastos dos rolês.</p>'}</div>`;
   return h;
@@ -1825,7 +1841,7 @@ document.addEventListener('change', e=>{
 });
 document.addEventListener('change', async e=>{
   if(e.target.id!=='imp-file' || !e.target.files[0]) return;
-  try{ const j=JSON.parse(await e.target.files[0].text()); const d=j.dados||j; if(!d.potes&&!d.orcamento) throw 0; pendingImport=d;
+  try{ const j=JSON.parse(await e.target.files[0].text()); const d=j.dados||j; if(!d.potes&&!d.orcamento&&!(j.casal&&j.casal.fundo)) throw 0; pendingImport=d; pendingCasal=j.casal||null;
     const box=document.getElementById('imp-confirm'); box.innerHTML=`<div class="confirm"><span style="flex:1">Backup de ${esc((j.exportadoEm||'').slice(0,10).split('-').reverse().join('/')||'data desconhecida')}. ${j.descricao?esc(j.descricao)+'. ':''}"Juntar" mantém tudo o que você já lançou e só acrescenta ou atualiza o que vem no arquivo.</span><span class="actions"><button class="btn sm pri" data-act="importar-ok">Juntar (recomendado)</button><button class="btn sm ghost" data-act="importar-subst">Substituir</button></span></div>`; }
   catch(err){ toast('Esse arquivo não é um backup do app'); }
 });
