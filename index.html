@@ -677,7 +677,7 @@ function vInicio(){
   let h = head(readonlyView()?`Finanças de ${esc(nomeParceiro())}`:`${hello}, ${esc(meuNome())}`, 'Tudo num lugar só', `Resumo de ${mLabel(mk).toLowerCase()}`, monthPicker());
   if (S.offline) h += `<div class="banner">Não consegui conectar ao Firebase. Confira a internet e o arquivo firebase-config.js.</div>`;
   h += `<div class="quick">
-    <button class="qa" data-act="novo-item">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
+    <button class="qa" data-act="novo-gasto">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
     <button class="qa" data-act="nova-compra">${'<i>'+svg('cartao')+'</i>'}Compra no cartão</button>
     <button class="qa" data-act="novo-mov">${'<i>'+svg('cx')+'</i>'}Guardar dinheiro</button>
     <button class="qa" data-act="novo-cashback">${'<i>'+svg('meliuz')+'</i>'}Cashback Méliuz</button>
@@ -741,8 +741,8 @@ function vGastos(){
   h += `<div class="grid g2 section">` + [0,1].map(col=>`<div class="stack">${CATS.filter((_,i)=>i%2===col).map(c=>catBlock(o,c,t)).join('')}</div>`).join('') + `</div>`;
   // avulsos
   const av = [...(o.avulsos||[])].sort((a,b)=>b.data.localeCompare(a.data));
-  h += `<div class="card section"><div class="card-h"><div><h2>Compras no débito, Pix e dinheiro</h2><p>Registro do dia a dia fora do cartão · total ${fmt(sum(av,x=>x.valor))}</p></div><button class="btn sm" data-act="novo-avulso">${svg('plus')}Adicionar</button></div>
-    ${av.length?`<div class="rows">${av.map(a=>`<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div></div><span class="v">${fmt(a.valor)}</span><button class="iconbtn" aria-label="Apagar ${esc(a.desc)}" data-del-avulso="${a.id}">${svg('trash')}</button></div>`).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
+  h += `<div class="card section"><div class="card-h"><div><h2>Compras no débito, Pix e dinheiro</h2><p>Cada compra lançada aqui já soma na categoria · total ${fmt(sum(av,x=>x.valor))}</p></div><button class="btn sm pri" data-act="novo-gasto">${svg('plus')}Lançar gasto</button></div>
+    ${av.length?`<div class="rows">${av.map(a=>{ const it=a.itemId&&(o.itens||[]).find(i=>i.id===a.itemId); const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro'}; return `<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div>${a.forma||it?`<div class="s">${a.forma?FM[a.forma]:''}${a.forma&&it?' · ':''}${it?`<i class="dot" style="background:${CAT[it.cat].c};width:7px;height:7px"></i> ${esc(CAT[it.cat].n)} › ${esc(it.nome)}`:''}</div>`:''}</div><span class="v">${fmt(a.valor)}</span><button class="iconbtn" aria-label="Apagar ${esc(a.desc)}" data-del-avulso="${a.id}">${svg('trash')}</button></div>`; }).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
   </div>`;
   // histórico
   const ks = Object.keys(S.orc).sort().slice(-8);
@@ -1302,9 +1302,28 @@ const ACT = {
       {name:'previsto',label:'Valor previsto (opcional)',type:'money'},
     ], onSubmit:v=>{ const o=ensureOrc(UI.month); o.itens.push({id:uid('i'),cat:v.cat,nome:v.nome.trim(),previsto:parseNum(v.previsto),real:parseNum(v.real)}); save('orcamento',UI.month,o); toast('Gasto lançado em '+mLabel(UI.month)); }});
   },
-  'novo-avulso'(){
-    form({title:'Compra no débito, Pix ou dinheiro', fields:[{name:'desc',label:'Descrição',req:true},{type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:defDate()}]}],
-      onSubmit:v=>{ const mk=v.data.slice(0,7); const o=ensureOrc(mk); o.avulsos=o.avulsos||[]; o.avulsos.push({id:uid('a'),data:v.data,desc:v.desc.trim(),valor:parseNum(v.valor)}); save('orcamento',mk,o); toast('Compra registrada'); }});
+  'novo-avulso'(){ ACT['novo-gasto']({}); },
+  'novo-gasto'(d){
+    const base=ensureOrc(UI.month); const itens=base.itens||[];
+    const opts=[]; CATS.forEach(c=>{ itens.filter(i=>i.cat===c.k).forEach(i=>opts.push([c.k+'|'+i.id, c.n+' › '+i.nome])); opts.push([c.k+'|novo', c.n+' › + novo item com esse nome']); });
+    const outros=itens.find(i=>i.cat==='gerais'&&/outros/i.test(i.nome));
+    const padrao = UI.lastGastoOpt && opts.some(o=>o[0]===UI.lastGastoOpt) ? UI.lastGastoOpt : (d.cat ? d.cat+'|novo' : outros ? 'gerais|'+outros.id : 'gerais|novo');
+    form({title:'Lançar gasto', fields:[
+      {name:'desc',label:'O que foi',req:true},
+      {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:defDate()}]},
+      {name:'forma',label:'Como pagou',type:'seg',options:[['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito']],value:'pix'},
+      {name:'onde',label:'Somar em qual categoria',type:'select',options:opts,value:padrao},
+    ], extra:`<p class="note" style="margin-top:-4px">Pix, débito e dinheiro entram na lista de compras e já somam na categoria. Cartão de crédito vai para a tela do Cartão, porque a fatura já é somada em "Contas fixas".</p>`,
+    onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor';
+      if(v.forma==='cartao'){ const cards=S.config.cartoes||['Nubank']; const mk=v.data.slice(0,7); const c=S.cartao[mk]?JSON.parse(JSON.stringify(S.cartao[mk])):{mes:mk,compras:[]}; c.compras.push({id:uid('c'),data:v.data,desc:v.desc.trim(),valor:val,parcela:'',cartao:cards[0]}); save('cartao',mk,c); toast('Lançado no cartão '+cards[0]+'. Para parcelar ou trocar de cartão, use "Compra no cartão".'); return; }
+      UI.lastGastoOpt=v.onde;
+      const mk=v.data.slice(0,7); const o=ensureOrc(mk); o.itens=o.itens||[]; o.avulsos=o.avulsos||[];
+      let [cat,iid]=v.onde.split('|'); let it=null;
+      if(iid!=='novo'){ const ref=itens.find(i=>i.id===iid); it=o.itens.find(i=>i.id===iid) || (ref && o.itens.find(i=>i.cat===cat&&semAcento(i.nome)===semAcento(ref.nome))); if(!it && ref){ it={id:uid('i'),cat,nome:ref.nome,previsto:0,real:0}; o.itens.push(it); } }
+      if(!it){ it=o.itens.find(i=>i.cat===cat&&semAcento(i.nome)===semAcento(v.desc)); if(!it){ it={id:uid('i'),cat,nome:v.desc.trim(),previsto:0,real:0}; o.itens.push(it); } }
+      it.real=r2((+it.real||0)+val);
+      o.avulsos.push({id:uid('a'),data:v.data,desc:v.desc.trim(),valor:val,forma:v.forma,cat,itemId:it.id});
+      save('orcamento',mk,o); toast('Lançado em '+CAT[cat].n+' › '+it.nome+(mk!==UI.month?' ('+mLabel(mk)+')':'')); }});
   },
   'nova-compra'(){
     const cards=S.config.cartoes||['Nubank'];
@@ -1821,7 +1840,7 @@ document.addEventListener('click', e=>{
   const fl = t.closest('[data-filtro]'); if(fl){ UI.cartaoFiltro=fl.dataset.filtro; render(); return; }
   const ix = t.closest('[data-incx]'); if(ix){ UI.incluirCx = ix.dataset.incx==='1'; render(); return; }
   const di = t.closest('[data-del-item]'); if(di){ const o=ensureOrc(UI.month); o.itens=o.itens.filter(i=>i.id!==di.dataset.delItem); save('orcamento',UI.month,o); toast('Item apagado'); return; }
-  const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); return; }
+  const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
   const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
   const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
   const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
