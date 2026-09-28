@@ -473,6 +473,7 @@ const VIEWS_ALL = VIEWS;
 const VIEWS_CASAL = [
   {g:'Casal', id:'casal', n:'Visão do casal', short:'Casal', i:'carteira'},
   {g:'Casal', id:'casal-cx', n:'Caixinhas do casal', short:'Caixinhas', i:'cx'},
+  {g:'Casal', id:'casal-role', n:'Fundo do rolê', short:'Rolê', i:'meliuz'},
 ];
 
 const CATS = [
@@ -644,7 +645,7 @@ function ring(p, big, small){
 /* ================= nav ================= */
 function renderNav(){
   const bs=document.getElementById('btn-sair'); if(bs) bs.hidden=!window.__logout;
-  const VIEWS = UI.perfil==='casal' ? VIEWS_CASAL : viewsVisiveis(); const BNAV = UI.perfil==='casal' ? ['casal','casal-cx'] : (S.config.menu ? VIEWS.slice(0,4).map(v=>v.id) : BNAV_ALL.filter(id=>VIEWS.some(v=>v.id===id)));
+  const VIEWS = UI.perfil==='casal' ? VIEWS_CASAL : viewsVisiveis(); const BNAV = UI.perfil==='casal' ? ['casal','casal-cx','casal-role'] : (S.config.menu ? VIEWS.slice(0,4).map(v=>v.id) : BNAV_ALL.filter(id=>VIEWS.some(v=>v.id===id)));
   renderSwitch();
   const groups = [...new Set(VIEWS.map(v=>v.g))];
   document.getElementById('sidenav').innerHTML = groups.map(g=>`<div class="navgroup">${g?`<h6>${g}</h6>`:''}${VIEWS.filter(v=>v.g===g).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.n}</button>`).join('')}</div>`).join('');
@@ -1543,7 +1544,7 @@ function menuModal(){
     <div class="foot" style="justify-content:space-between"><button class="btn ghost" data-act="menu-padrao">Restaurar padrão</button><span class="actions"><button class="btn ghost" data-close>Cancelar</button><button class="btn pri" data-act="menu-salvar">Salvar</button></span></div>`, true);
 }
 /* ================= perfis e casal ================= */
-const C = { on:false, me:null, meNome:'', cid:null, casal:null, parc:null, potesDe:{}, cpotes:{}, unsubs:[], ready:false };
+const C = { on:false, me:null, meNome:'', cid:null, casal:null, parc:null, potesDe:{}, cpotes:{}, fundo:null, unsubs:[], ready:false };
 const COR_EU='var(--accent)', COR_PARC='var(--gold)';
 function readonlyView(){ return UI.perfil==='parceiro'; }
 function meuNome(){ return C.meNome || 'Rayssa'; }
@@ -1558,6 +1559,7 @@ function initCasal(){
     C.cid = info ? info.cid : null; C.casal = info; C.parc = info ? (info.membros||[]).find(u=>u!==C.me) || null : null;
     if (info && info.nomes && info.nomes[C.me]) C.meNome = info.nomes[C.me];
     if (C.cid){
+      C.unsubs.push(cp.casalDb(C.cid).collection('fundo').onSnapshot(sn=>{ const d=sn.docs.find(x=>x.id==='role'); C.fundo=d?d.data():null; if(UI.perfil==='casal') render(); }, ()=>{}));
       C.unsubs.push(cp.casalDb(C.cid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.cpotes=o; if(UI.perfil==='casal') render(); }, ()=>{}));
     }
     if (UI.perfil==='parceiro' && !C.parc) setPerfil('eu');
@@ -1633,6 +1635,8 @@ function vCasal(){
   const movs=[]; cx.forEach(p=>(p.movimentos||[]).forEach(m=>movs.push({...m,cx:p.nome,cor:p.cor})));
   movs.sort((x,y)=>y.data.localeCompare(x.data));
   if (movs.length) h += `<div class="card section"><div class="card-h"><div><h2>Últimas movimentações</h2></div></div><div class="rows">${movs.slice(0,8).map(m=>`<div class="row">${dBox(m.data)}<div class="grow"><div class="t">${m.tipo==='aporte'?'Guardou':m.tipo==='resgate'?'Retirou':'Rendimento'} · ${esc(m.cx)}</div><div class="s">${m.tipo!=='rendimento'?`<span class="who"><i style="background:${corDe(m.quem)}"></i>${esc(nomeDe(m.quem))}</span>`:''}${m.obs?' · '+esc(m.obs):''}</div></div><span class="v ${m.tipo==='resgate'?'neg':'pos'}">${m.tipo==='resgate'?'−':'+'}${fmt(m.valor)}</span></div>`).join('')}</div></div>`;
+  if (C.fundo) { const tf=sum(C.fundo.carteiras||[],c=>carteiraSaldo(C.fundo,c.id)); h += `<div class="card section" data-go="casal-role" style="cursor:pointer;display:flex;align-items:center;gap:14px"><span style="font-size:1.6rem">🍔</span><div class="grow" style="flex:1"><h2>Fundo do rolê</h2><p class="muted" style="margin:2px 0 0;font-size:.84rem">VR de vocês para lanche e almoço fora</p></div><span class="v" style="font-family:var(--display);font-size:1.3rem">${fmt(tf)}</span></div>`; }
+  else h += `<div class="card section" data-go="casal-role" style="cursor:pointer;display:flex;align-items:center;gap:14px"><span style="font-size:1.6rem">🍔</span><div style="flex:1"><h2>Fundo do rolê</h2><p class="muted" style="margin:2px 0 0;font-size:.84rem">Controlem o VR de vocês para lanche e almoço fora</p></div><span class="btn sm pri">Montar</span></div>`;
   h += `<p class="note">O dinheiro pessoal de cada um continua só na tela de cada um. Aqui entra apenas o que vocês colocam nas caixinhas do casal.</p>
     <div class="actions section" style="justify-content:flex-end"><button class="btn ghost danger sm" data-act="sair-casal">Desfazer vínculo do casal</button></div>`;
   return h;
@@ -1686,6 +1690,83 @@ function cxCasalForm(id){
   onSubmit:v=>{ const q={...(id?JSON.parse(JSON.stringify(p)):{movimentos:[],ordem:Object.keys(C.cpotes).length}),nome:v.nome.trim(),meta:parseNum(v.meta),cor:v.cor}; const nid=id||uid('cx'); saveCasal(nid,q); toast(id?'Salvo':'Caixinha do casal criada'); }});
 }
 ACT['apagar-cx-casal']=d=>{ delete C.cpotes[d.id]; render(); window.__couple.casalDb(C.cid).collection('potes').doc(d.id).delete(); toast('Apagada'); };
+
+/* ---- Fundo do rolê (VR do casal) ---- */
+const ROLE_CATS=[['lanche','Lanche','🍔'],['restaurante','Restaurante','🍽️'],['mercado','Mercado','🛒'],['delivery','Delivery','🛵'],['passeio','Cinema / passeio','🎬'],['outros','Outros','✨']];
+const ROLE_CAT=Object.fromEntries(ROLE_CATS.map(c=>[c[0],c]));
+const COMIDA=['lanche','restaurante','mercado'];
+function saveFundo(f){ C.fundo=f; render(); window.__couple.casalDb(C.cid).collection('fundo').doc('role').set(JSON.parse(JSON.stringify(f))).catch(()=>toast('Não consegui salvar. Tente de novo.')); }
+function carteiraSaldo(f,cid,mk){ return sum((f.lancamentos||[]).filter(l=>l.carteira===cid&&(!mk||l.data.startsWith(mk))),l=>l.tipo==='entrada'?l.valor:-l.valor); }
+function vRole(){
+  let h = head('Casal','Fundo do rolê','O VR de vocês dois, só para lanche, almoço fora e bobeiras juntos', C.fundo?`<div class="actions"><button class="btn" data-act="role-entrada">${svg('plus')}Entrou VR</button><button class="btn pri" data-act="role-gasto">${svg('plus')}Gasto</button></div>`:'');
+  if (!C.on) return h+'<div class="card empty"><p>O fundo do rolê funciona na versão do app com login.</p></div>';
+  if (!C.parc) return h+vincularHtml();
+  const f=C.fundo;
+  if (!f){
+    return h+`<div class="card" style="max-width:640px"><h2>Vamos montar o fundo de vocês</h2><p class="sub">São duas carteiras. O dinheiro continua onde está: no cartão Alelo e com quem recebe em dinheiro. O app só controla quanto vocês têm para os rolês.</p>
+      <div class="grid g2 section">
+        <div style="border:1px solid var(--line);border-radius:14px;padding:14px"><div class="lbl" style="font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">💳 Cartão (Alelo)</div>
+          <div class="field" style="margin-top:8px"><label for="rc-a-dono">Quem recebe</label><select id="rc-a-dono"><option value="${C.me}">${esc(meuNome())}</option><option value="${C.parc}">${esc(nomeParceiro())}</option></select></div>
+          <div class="field" style="margin:0"><label for="rc-a-val">VR por mês (opcional)</label><input id="rc-a-val" inputmode="decimal" placeholder="0,00"></div></div>
+        <div style="border:1px solid var(--line);border-radius:14px;padding:14px"><div class="lbl" style="font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">💵 Dinheiro</div>
+          <div class="field" style="margin-top:8px"><label for="rc-d-dono">Quem recebe</label><select id="rc-d-dono"><option value="${C.parc}">${esc(nomeParceiro())}</option><option value="${C.me}">${esc(meuNome())}</option></select></div>
+          <div class="field" style="margin:0"><label for="rc-d-val">VR por mês (opcional)</label><input id="rc-d-val" inputmode="decimal" placeholder="0,00"></div></div>
+      </div>
+      <div class="field section"><label for="rc-saldo">Saldo que já tem hoje no Alelo (opcional)</label><input id="rc-saldo" inputmode="decimal" placeholder="0,00" style="max-width:220px"></div>
+      <button class="btn pri" data-act="role-criar">Criar fundo do rolê</button></div>`;
+  }
+  const mk=thisMonth(), L=[...(f.lancamentos||[])].sort((a,b)=>b.data.localeCompare(a.data)||0);
+  const cs=f.carteiras||[]; const tot=sum(cs,c=>carteiraSaldo(f,c.id));
+  const gMes=sum(L.filter(l=>l.tipo==='gasto'&&l.data.startsWith(mk)),l=>l.valor);
+  const eMes=sum(L.filter(l=>l.tipo==='entrada'&&!l.inicial&&l.data.startsWith(mk)),l=>l.valor);
+  const ic=c=>c.tipo==='alelo'?'💳':'💵';
+  h += `<div class="grid g4">
+    <div class="card stat hero"><div class="lbl">Disponível para rolê</div><div class="val ${tot>=0?'pos':'neg'}">${fmt(tot)}</div><div class="ft">Somando as duas carteiras</div></div>
+    ${cs.map(c=>{const sd=carteiraSaldo(f,c.id); return `<div class="card stat"><div class="lbl">${ic(c)} ${esc(c.nome)}</div><div class="val sm ${sd<0?'neg':''}">${fmt(sd)}</div><div class="ft"><span class="who"><i style="background:${corDe(c.dono)}"></i>${esc(nomeDe(c.dono))}</span>${+c.padrao?' · VR '+fmt(c.padrao)+'/mês':''}</div></div>`;}).join('')}
+    <div class="card stat"><div class="lbl">Gasto em ${mShort(mk)}</div><div class="val sm">${fmt(gMes)}</div><div class="ft">${eMes?`Entrou ${fmt(eMes)} de VR`:'Nenhum VR lançado no mês'}</div></div>
+  </div>`;
+  // entrada rápida do VR do mês
+  const faltaVR=cs.filter(c=>+c.padrao && !L.some(l=>l.tipo==='entrada'&&!l.inicial&&l.carteira===c.id&&l.data.startsWith(mk)));
+  if (faltaVR.length) h += `<div class="banner section" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>O VR de ${mLabel(mk).toLowerCase()} ainda não foi lançado${faltaVR.length===1?' em '+esc(faltaVR[0].nome):''}.</span><span class="actions">${faltaVR.map(c=>`<button class="btn sm pri" data-act="role-vr-rapido" data-cart="${c.id}">+ ${fmt(c.padrao)} em ${esc(c.nome)}</button>`).join('')}</span></div>`;
+  const alelo=cs.find(c=>c.tipo==='alelo');
+  if (alelo && carteiraSaldo(f,alelo.id)>0) h += `<div class="card section" style="background:var(--accent-soft);border:0;box-shadow:none"><p style="margin:0;font-size:.9rem">💡 <b>Dica:</b> o Alelo só passa em comida (restaurante, lanchonete e mercado). Usem ele primeiro nessas horas e guardem o dinheiro para cinema, delivery por Pix e o que o Alelo não paga. Assim o dinheiro livre dura mais.</p></div>`;
+  // por categoria no mês
+  const gm=L.filter(l=>l.tipo==='gasto'&&l.data.startsWith(mk));
+  const byC=ROLE_CATS.map(([k,n,e])=>({k,n,e,v:sum(gm.filter(l=>l.cat===k),l=>l.valor)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+  const ms=[...new Set(L.map(l=>l.data.slice(0,7)))].sort().slice(-6);
+  const ser=cs.map((c,i)=>({name:c.nome,color:i?'var(--gold)':'var(--accent)',values:ms.map(m=>sum(L.filter(l=>l.tipo==='gasto'&&l.carteira===c.id&&l.data.startsWith(m)),l=>l.valor))}));
+  h += `<div class="grid g2 section">
+    <div class="card"><div class="card-h"><div><h2>Onde vocês gastaram em ${mShort(mk)}</h2></div></div>${byC.length?`<div class="rows">${byC.map(x=>`<div class="row" style="padding:7px 0"><span style="font-size:1.1rem">${x.e}</span><div class="grow"><div class="t">${x.n}</div><div class="bar" style="margin-top:5px;height:6px"><i style="width:${gMes?x.v/gMes*100:0}%"></i></div></div><span class="v">${fmt(x.v)}</span></div>`).join('')}</div>`:'<p class="muted">Nenhum gasto neste mês ainda.</p>'}</div>
+    <div class="card"><div class="card-h"><div><h2>Gastos por mês</h2><p>Por carteira</p></div></div>${ms.length?barChart({labels:ms.map(mShort),series:ser,stacked:true,h:180})+legend(ser):'<p class="muted">Sem dados ainda.</p>'}</div>
+  </div>`;
+  h += `<div class="card section"><div class="card-h"><div><h2>Lançamentos</h2><p>${L.length} no total</p></div><button class="btn sm ghost" data-act="role-config">Carteiras</button></div>
+    ${L.length?`<div class="rows">${L.slice(0,UI.roleAll?999:20).map(l=>{const c=cs.find(x=>x.id===l.carteira)||{}; const cat=ROLE_CAT[l.cat]; return `<div class="row">${dBox(l.data)}<div class="grow"><div class="t">${l.tipo==='entrada'?(l.inicial?'Saldo inicial':'Entrou VR'):(cat?cat[2]+' ':'')+esc(l.desc||cat&&cat[1]||'Gasto')}</div><div class="s">${ic(c)} ${esc(c.nome||'')} · <span class="who"><i style="background:${corDe(l.quem)}"></i>${esc(nomeDe(l.quem))}</span>${l.dica?' · <span style="color:var(--gold)">dava pra usar o Alelo</span>':''}</div></div><span class="v ${l.tipo==='entrada'?'pos':''}">${l.tipo==='entrada'?'+':'−'}${fmt(l.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-role="${l.id}">${svg('trash')}</button></div>`;}).join('')}</div>${L.length>20&&!UI.roleAll?`<button class="btn sm ghost" data-roleall>Ver todos (${L.length})</button>`:''}`:'<p class="muted">Lance o VR que entrou e os gastos dos rolês.</p>'}</div>`;
+  return h;
+}
+Object.assign(ACT,{
+  'role-criar'(){ const g=id=>(document.getElementById(id)||{}).value||''; const ad=g('rc-a-dono'), dd=g('rc-d-dono');
+    const nomeA='Alelo '+(ad===C.me?meuNome():nomeParceiro()), nomeD='VR '+(dd===C.me?meuNome():nomeParceiro())+' (dinheiro)';
+    const f={carteiras:[{id:'alelo',nome:nomeA,dono:ad,tipo:'alelo',padrao:r2(parseNum(g('rc-a-val')))},{id:'dinheiro',nome:nomeD,dono:dd,tipo:'dinheiro',padrao:r2(parseNum(g('rc-d-val')))}],lancamentos:[]};
+    const sd=r2(parseNum(g('rc-saldo'))); if(sd) f.lancamentos.push({id:uid('r'),data:todayISO(),tipo:'entrada',carteira:'alelo',valor:sd,desc:'Saldo inicial do Alelo',quem:ad,inicial:true});
+    saveFundo(f); toast('Fundo do rolê criado 🎉'); },
+  'role-entrada'(){ const cs=C.fundo.carteiras;
+    form({title:'Entrou VR', fields:[{name:'carteira',label:'Em qual carteira',type:'seg',options:cs.map(c=>[c.id,c.nome]),value:(cs.find(c=>c.dono===C.me)||cs[0]).id},{type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]}],
+      onSubmit:v=>{ const c=cs.find(x=>x.id===v.carteira); const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; saveFundo({...C.fundo,lancamentos:[...(C.fundo.lancamentos||[]),{id:uid('r'),data:v.data,tipo:'entrada',carteira:v.carteira,valor:val,quem:c.dono}]}); toast('VR lançado'); }}); },
+  'role-vr-rapido'(d){ const c=C.fundo.carteiras.find(x=>x.id===d.cart); saveFundo({...C.fundo,lancamentos:[...(C.fundo.lancamentos||[]),{id:uid('r'),data:todayISO(),tipo:'entrada',carteira:c.id,valor:+c.padrao,quem:c.dono}]}); toast('VR de '+mShort(thisMonth())+' lançado'); },
+  'role-gasto'(){ const cs=C.fundo.carteiras; const al=cs.find(c=>c.tipo==='alelo');
+    form({title:'Gasto do rolê', fields:[
+      {name:'desc',label:'O que foi (ex.: Almoço no shopping)'},
+      {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
+      {name:'cat',label:'Tipo',type:'select',options:ROLE_CATS.map(c=>[c[0],c[2]+' '+c[1]]),value:'lanche'},
+      {name:'carteira',label:'Pago com',type:'seg',options:cs.map(c=>[c.id,(c.tipo==='alelo'?'💳 ':'💵 ')+c.nome]),value:(al||cs[0]).id},
+    ], onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor';
+      const dica = al && v.carteira!==al.id && COMIDA.includes(v.cat) && carteiraSaldo(C.fundo,al.id)>=val;
+      saveFundo({...C.fundo,lancamentos:[...(C.fundo.lancamentos||[]),{id:uid('r'),data:v.data,tipo:'gasto',carteira:v.carteira,valor:val,desc:v.desc.trim(),cat:v.cat,quem:C.me,dica:!!dica}]});
+      toast(dica?'Salvo. Dica: esse dava pra pagar com o Alelo 😉':'Gasto lançado'); }}); },
+  'role-config'(){ const cs=C.fundo.carteiras;
+    form({title:'Carteiras do rolê', fields:cs.flatMap((c,i)=>[{type:'row',items:[{name:'n'+i,label:(c.tipo==='alelo'?'💳 ':'💵 ')+'Nome',value:c.nome},{name:'p'+i,label:'VR por mês',type:'money',value:c.padrao?r2(c.padrao).toLocaleString('pt-BR',{minimumFractionDigits:2}):''}]}]),
+      onSubmit:v=>{ saveFundo({...C.fundo,carteiras:cs.map((c,i)=>({...c,nome:(v['n'+i]||c.nome).trim(),padrao:r2(parseNum(v['p'+i]))}))}); toast('Carteiras salvas'); }}); },
+});
 /* ================= events ================= */
 document.addEventListener('click', e=>{
   const t = e.target;
@@ -1693,6 +1774,8 @@ document.addEventListener('click', e=>{
   const cxc = t.closest('[data-cxc]'); if(cxc){ openCxCasal(cxc.dataset.cxc); return; }
   const gi = t.closest('[data-grupo-item]'); if(gi){ const o=ensureOrc(UI.month); const it=o.itens.find(i=>i.id===gi.dataset.grupoItem); if(it){ it.grupo = grupoInvest(it)==='longo'?'caixinhas':'longo'; save('orcamento',UI.month,o); } return; }
   const mv = t.closest('[data-menu-mv]'); if(mv){ lerMenuInputs(); const i=+mv.dataset.i, j=i+(+mv.dataset.menuMv); if(j>=0&&j<MENU_TMP.length){ [MENU_TMP[i],MENU_TMP[j]]=[MENU_TMP[j],MENU_TMP[i]]; menuModal(); } return; }
+  const dro = t.closest('[data-del-role]'); if(dro){ saveFundo({...C.fundo,lancamentos:(C.fundo.lancamentos||[]).filter(l=>l.id!==dro.dataset.delRole)}); return; }
+  if(t.closest('[data-roleall]')){ UI.roleAll=true; render(); return; }
   const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
   const goB = t.closest('[data-go]'); if(goB){ go(goB.dataset.go); return; }
   if(t.closest('[data-more]')){ document.getElementById('more').classList.toggle('open'); return; }
@@ -1764,7 +1847,7 @@ function render(){
   pickMonth();
   // keep focus on inline inputs across re-render
   const ae=document.activeElement; const key = ae && ae.id ? '#'+ae.id : (ae && ae.dataset && ae.dataset.item ? `[data-item="${ae.dataset.item}"][data-f="${ae.dataset.f}"]` : null);
-  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz,casal:vCasal,'casal-cx':vCasalCx};
+  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz,casal:vCasal,'casal-cx':vCasalCx,'casal-role':vRole};
   if(UI.perfil==='casal' && !UI.view.startsWith('casal')) UI.view='casal';
   if(UI.perfil!=='casal' && UI.view.startsWith('casal')) UI.view='inicio';
   const _cn = UI.perfil!=='casal' ? nomeView(UI.view) : null;
