@@ -32,7 +32,7 @@ img{max-width:100%}
   function loginScreen(msg){
     let el=document.getElementById('login');
     if(!el){ el=document.createElement('div'); el.id='login'; document.body.appendChild(el); }
-    el.innerHTML='<div class="box"><svg width="64" height="64" viewBox="0 0 40 40"><defs><linearGradient id="lgx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b3f8c"/><stop offset="1" stop-color="#d8577e"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#lgx)"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 30V10h7a5.2 5.2 0 0 1 0 10.4h-7"/><path d="M19 20.4l6.5 9.6"/></g><path d="M30 6.5l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2z" fill="#fff"/></svg>'
+    el.innerHTML='<div class="box"><svg width="64" height="64" viewBox="0 0 40 40"><defs><linearGradient id="lgx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b3f8c"/><stop offset="1" stop-color="#d8577e"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#lgx)"/><g fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.5v13M17 13.5l-9 7.5M11.6 18.3l5.8 8.2"/><path d="M21.5 26.5v-13h5a3.5 3.5 0 0 1 0 7h-5M26.2 20.5l4.6 6"/></g><path d="M33 4.8l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z" fill="#fff"/></svg>'
       +'<h1>Finanças</h1><p>'+(cfgOk?'Entre com a sua conta Google para ver suas finanças.':'Falta configurar o Firebase: preencha o arquivo firebase-config.js (veja o LEIA-ME).')+'</p>'
       +(cfgOk?'<button id="btn-google"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Entrar com Google</button>':'')
       +(msg?'<div class="err">'+msg+'</div>':'')+'</div>';
@@ -160,7 +160,7 @@ button{cursor:pointer}
 .side{position:sticky;top:0;height:100vh;padding:24px 14px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:22px;background:var(--bg)}
 .brand{display:flex;align-items:center;gap:10px;padding:0 8px}
 .brand svg{width:36px;height:36px;flex:none}
-.brand .spark{transform-origin:30px 10.5px;animation:spark 3.2s ease-in-out infinite}
+.brand .spark{transform-origin:33px 8.1px;animation:spark 3.2s ease-in-out infinite}
 @keyframes spark{0%,70%,100%{transform:scale(1);opacity:1}80%{transform:scale(1.5) rotate(45deg);opacity:.7}}
 .brand b{font-family:var(--display);font-size:1.12rem;letter-spacing:-.01em}
 .brand small{display:block;color:var(--muted);font-size:.75rem;font-weight:500}
@@ -377,7 +377,12 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
 .pbtn{display:flex;align-items:center;gap:9px;border:0;background:none;border-radius:9px;padding:6px 8px;font-weight:600;font-size:.88rem;color:var(--ink-2);text-align:left}
 .pbtn:hover{background:var(--surface-2);color:var(--ink)}
 .pbtn[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink)}
-.pbtn .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:.78rem;font-weight:700;flex:none}
+.pbtn .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:.78rem;font-weight:700;flex:none;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover;display:block}
+.pswitch .ph{display:flex;align-items:center;justify-content:space-between}
+.pswitch .ph .iconbtn{width:24px;height:24px}
+.pswitch .ph .iconbtn:hover,.fotorow .iconbtn:hover{color:var(--accent)}
+.fotorow .av{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:1.3rem;font-weight:700;flex:none;overflow:hidden}
 .pbtn small{margin-left:auto;font-size:.68rem;color:var(--muted);font-weight:600}
 .pswitch-m{display:none}
 @media (max-width:760px){
@@ -398,7 +403,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
 <div class="app">
   <aside class="side" aria-label="Navegação">
     <div class="brand">
-      <svg viewBox="0 0 40 40" aria-hidden="true" class="logo"><defs><linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--gold)"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#logo-g)"/><g fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 30V10h7a5.2 5.2 0 0 1 0 10.4h-7"/><path d="M19 20.4l6.5 9.6"/></g><path class="spark" d="M30 6.5l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2z" fill="#fff"/><circle cx="31.5" cy="18.5" r="1.3" fill="#fff" opacity=".8"/></svg>
+      <svg viewBox="0 0 40 40" aria-hidden="true" class="logo"><defs><linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--gold)"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#logo-g)"/><g fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.5v13M17 13.5l-9 7.5M11.6 18.3l5.8 8.2"/><path d="M21.5 26.5v-13h5a3.5 3.5 0 0 1 0 7h-5M26.2 20.5l4.6 6"/></g><path class="spark" d="M33 4.8l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z" fill="#fff"/></svg>
       <div><b>Finanças</b><small id="brand-sub">da Rayssa</small></div>
     </div>
     <div id="perfil-switch" class="pswitch" hidden></div>
@@ -1576,7 +1581,7 @@ function menuModal(){
     <div class="foot" style="justify-content:space-between"><button class="btn ghost" data-act="menu-padrao">Restaurar padrão</button><span class="actions"><button class="btn ghost" data-close>Cancelar</button><button class="btn pri" data-act="menu-salvar">Salvar</button></span></div>`, true);
 }
 /* ================= perfis e casal ================= */
-const C = { on:false, me:null, meNome:'', cid:null, casal:null, parc:null, potesDe:{}, cpotes:{}, fundo:null, unsubs:[], ready:false };
+const C = { on:false, me:null, meNome:'', cid:null, casal:null, parc:null, potesDe:{}, cpotes:{}, fundo:null, unsubs:[], ready:false, fotos:{} };
 const COR_EU='var(--accent)', COR_PARC='var(--gold)';
 function readonlyView(){ return UI.perfil==='parceiro'; }
 function meuNome(){ return C.meNome || 'Rayssa'; }
@@ -1586,13 +1591,16 @@ function corDe(uid){ return uid===C.me ? COR_EU : COR_PARC; }
 function initCasal(){
   const cp=window.__couple; C.on=true; C.me=cp.me.uid; C.meNome=cp.me.nome;
   renderNav();
+  try{ db.doc('perfil/foto').onSnapshot(d=>{ C.fotos.eu=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}); }catch(e){}
   cp.onCasal(info=>{
-    C.unsubs.forEach(u=>{ try{u()}catch(e){} }); C.unsubs=[]; C.potesDe={}; C.cpotes={};
+    C.unsubs.forEach(u=>{ try{u()}catch(e){} }); C.unsubs=[]; C.potesDe={}; C.cpotes={}; C.fotos={eu:C.fotos.eu};
     C.cid = info ? info.cid : null; C.casal = info; C.parc = info ? (info.membros||[]).find(u=>u!==C.me) || null : null;
     if (info && info.nomes && info.nomes[C.me]) C.meNome = info.nomes[C.me];
     if (C.cid){
       C.unsubs.push(cp.casalDb(C.cid).collection('fundo').onSnapshot(sn=>{ const d=sn.docs.find(x=>x.id==='role'); C.fundo=d?d.data():null; if(UI.perfil==='casal') render(); }, ()=>{}));
       C.unsubs.push(cp.casalDb(C.cid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.cpotes=o; if(UI.perfil==='casal') render(); }, ()=>{}));
+      C.unsubs.push(cp.casalDb(C.cid).doc('perfil/fotos').onSnapshot(d=>{ C.fotos.casal=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}));
+      if (C.parc) C.unsubs.push(cp.dbFor(C.parc).doc('perfil/foto').onSnapshot(d=>{ C.fotos.parc=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}));
     }
     if (UI.perfil==='parceiro' && !C.parc) setPerfil('eu');
     C.ready=true; renderNav(); render();
@@ -1608,18 +1616,44 @@ function setPerfil(p){
   renderNav(); render(); window.scrollTo(0,0);
 }
 function pbtns(){
-  const b=(p,label,av,col,extra='')=>`<button class="pbtn" data-perfil="${p}" aria-pressed="${UI.perfil===p}"><span class="av" style="background:${col}">${av}</span>${esc(label)}${extra}</button>`;
-  return b('eu',meuNome(),esc(meuNome()[0]||'E').toUpperCase(),COR_EU,'<small>você</small>')
-    + (C.parc? b('parceiro',nomeParceiro(),esc(nomeParceiro()[0]||'P').toUpperCase(),COR_PARC) : '')
-    + b('casal', C.parc?'Casal':'Casal · vincular','♥','linear-gradient(135deg,var(--accent),var(--gold))');
+  const b=(p,label,extra='')=>`<button class="pbtn" data-perfil="${p}" aria-pressed="${UI.perfil===p}">${avatar(p)}${esc(label)}${extra}</button>`;
+  return b('eu',meuNome(),'<small>você</small>')
+    + (C.parc? b('parceiro',nomeParceiro()) : '')
+    + b('casal', C.parc?'Casal':'Casal · vincular');
 }
+const CAM='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+function avatar(p){
+  const k=p==='parceiro'?'parc':p, img=C.fotos[k];
+  const col=p==='eu'?COR_EU:p==='parceiro'?COR_PARC:'linear-gradient(135deg,var(--accent),var(--gold))';
+  const txt=p==='casal'?'♥':esc(((p==='eu'?meuNome():nomeParceiro())[0]||'?').toUpperCase());
+  return `<span class="av" style="background:${col}">${img?`<img src="${esc(img)}" alt="">`:txt}</span>`;
+}
+function fotosModal(){
+  const row=(p,nome,pode)=>`<div class="row fotorow" style="gap:12px">${avatar(p)}<div class="grow"><div class="t">${esc(nome)}</div><div class="s">${pode?'Toque em "Escolher" para trocar':'Só '+esc(nome)+' pode trocar a própria foto'}</div></div>${pode?`<label class="btn sm" style="cursor:pointer">Escolher<input type="file" accept="image/*" data-foto="${p}" hidden></label>${C.fotos[p==='parceiro'?'parc':p]?`<button class="iconbtn" data-act="foto-remover" data-p="${p}" aria-label="Tirar foto">${svg('trash')}</button>`:''}`:''}</div>`;
+  modal(`<h3>Fotos</h3><p class="sub" style="margin:-6px 0 10px">A foto aparece para vocês dois no seletor "Ver finanças de".</p>
+    <div class="rows">${row('eu',meuNome(),true)}${C.parc?row('parceiro',nomeParceiro(),false):''}${C.cid?row('casal','Casal',true):''}</div>
+    ${C.cid?'':'<p class="note">A foto do casal fica disponível depois de vincular o casal.</p>'}
+    <div class="foot"><button class="btn" data-close>Fechar</button></div>`);
+}
+function reduzirFoto(file){ return new Promise((ok,err)=>{ const fr=new FileReader(); fr.onerror=err; fr.onload=()=>{ const im=new Image(); im.onerror=err; im.onload=()=>{ const S2=160, c=document.createElement('canvas'); c.width=c.height=S2; const m=Math.min(im.width,im.height); c.getContext('2d').drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,S2,S2); ok(c.toDataURL('image/jpeg',.82)); }; im.src=fr.result; }; fr.readAsDataURL(file); }); }
+function fotoUpd(){ renderNav(); if(document.querySelector('#main .pswitch-m')) render(); }
+function fotoRef(p){ return p==='casal' ? window.__couple.casalDb(C.cid).doc('perfil/fotos') : db.doc('perfil/foto'); }
+async function salvarFoto(p,img){
+  const k=p==='parceiro'?'parc':p; C.fotos[k]=img; fotoUpd(); fotosModal();
+  try{ await (img? fotoRef(p).set({img}) : fotoRef(p).delete()); toast(img?'Foto salva':'Foto removida'); }catch(e){ toast('Não consegui salvar a foto. Tente de novo.'); }
+}
+document.addEventListener('change', async e=>{
+  const p=e.target.dataset && e.target.dataset.foto; if(!p || !e.target.files[0]) return;
+  try{ salvarFoto(p, await reduzirFoto(e.target.files[0])); }catch(err){ toast('Não consegui abrir essa imagem'); }
+});
+Object.assign(ACT,{ 'fotos'(){ document.getElementById('more').classList.remove('open'); fotosModal(); }, 'foto-remover'(d){ salvarFoto(d.p,null); } });
 function renderSwitch(){
   const el=document.getElementById('perfil-switch'); if(!el) return;
   el.hidden=!C.on; if(!C.on) return;
-  el.innerHTML='<h6>Ver finanças de</h6>'+pbtns();
+  el.innerHTML=`<div class="ph"><h6>Ver finanças de</h6><button class="iconbtn" data-act="fotos" aria-label="Trocar fotos" title="Trocar fotos">${CAM}</button></div>`+pbtns();
   const sub=document.getElementById('brand-sub'); if(sub) sub.textContent = UI.perfil==='casal' ? 'do casal' : UI.perfil==='parceiro' ? 'de '+nomeParceiro() : 'de '+meuNome();
 }
-function switchMobile(){ return C.on ? `<div class="pswitch-m">${pbtns()}</div>` : ''; }
+function switchMobile(){ return C.on ? `<div class="pswitch-m">${pbtns()}<button class="pbtn" data-act="fotos" aria-label="Trocar fotos">${CAM}</button></div>` : ''; }
 
 /* ---- visão do casal ---- */
 function resumoPessoa(potes){
@@ -1818,7 +1852,7 @@ document.addEventListener('click', e=>{
   if(t.closest('[data-close]') || t.matches('[data-scrim]')){ closeModal(); return; }
   const mn = t.closest('[data-mnav]'); if(mn){ UI.month=addMonth(UI.month,+mn.dataset.mnav); render(); return; }
   const act = t.closest('[data-act]');
-  if(act && readonlyView() && !['cores','backup','exportar','sair'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
+  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
   if(act){
     e.preventDefault();
     if(act.dataset.act==='apagar-pote'){ const id=act.dataset.pote; closeModal(); remove('potes',id); toast('Apagado'); return; }
