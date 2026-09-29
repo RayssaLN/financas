@@ -113,6 +113,7 @@ img{max-width:100%}
 </head>
 <body>
 
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%237b3f8c%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23d8577e%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20rx%3D%2212%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%2013.5v13M17%2013.5l-9%207.5M11.6%2018.3l5.8%208.2%22/%3E%3Cpath%20d%3D%22M21.5%2026.5v-13h5a3.5%203.5%200%200%201%200%207h-5M26.2%2020.5l4.6%206%22/%3E%3C/g%3E%3Cpath%20d%3D%22M33%204.8l1%202.3%202.3%201-2.3%201-1%202.3-1-2.3-2.3-1%202.3-1z%22%20fill%3D%22%23fff%22/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600;700&display=swap">
@@ -338,6 +339,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
 /* bottom nav (mobile) */
 .bnav{display:none}
 .more{display:none}
+.mbrand{display:none}
 
 @media (max-width: 980px){
   .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -345,10 +347,17 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
   .quick{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width: 760px){
-  .app{grid-template-columns:1fr}
+  .app{grid-template-columns:minmax(0,1fr)}
   .side{display:none}
+  html,body{overflow-x:hidden}
+  main{min-width:0}
   main{padding:18px 16px calc(96px + env(safe-area-inset-bottom,0px))}
-  .g3,.g2{grid-template-columns:1fr}
+  .g3,.g2,.g21{grid-template-columns:minmax(0,1fr)}
+  .mbrand{display:flex;align-items:center;gap:9px;margin:0 0 12px}
+  .mbrand svg{width:30px;height:30px;flex:none}
+  .mbrand b{font-family:var(--display);font-size:1.05rem}
+  .mbrand small{color:var(--muted);font-size:.75rem;font-weight:500;margin-left:2px}
+  .pot .meta{flex-wrap:wrap}
   .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
   .bnav button{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;font-weight:600;color:var(--muted);padding:6px 0;border-radius:10px}
   .bnav svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -379,6 +388,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
 .pbtn[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink)}
 .pbtn .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:.78rem;font-weight:700;flex:none;overflow:hidden}
 .av img{width:100%;height:100%;object-fit:cover;display:block}
+.pbtn > svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .pswitch .ph{display:flex;align-items:center;justify-content:space-between}
 .pswitch .ph .iconbtn{width:24px;height:24px}
 .pswitch .ph .iconbtn:hover,.fotorow .iconbtn:hover{color:var(--accent)}
@@ -656,7 +666,7 @@ function renderNav(){
   document.getElementById('sidenav').innerHTML = groups.map(g=>`<div class="navgroup">${g?`<h6>${g}</h6>`:''}${VIEWS.filter(v=>v.g===g).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.n}</button>`).join('')}</div>`).join('');
   const inMore = !BNAV.includes(UI.view);
   document.getElementById('bnav').innerHTML = BNAV.map(id=>{const v=VIEWS.find(x=>x.id===id); return `<button data-go="${id}" ${UI.view===id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`;}).join('') + `<button data-more ${inMore?'aria-current="page"':''}>${svg('more')}Mais</button>`;
-  document.getElementById('morepanel').innerHTML = VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="cores">${svg('carteira')}Cores do app</button><button class="navbtn" data-act="menu">${svg('gastos')}Personalizar menu</button><button class="navbtn" data-act="backup">${svg('cx')}Backup dos dados</button>` + (window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair</button>`:'');
+  document.getElementById('morepanel').innerHTML = (C.on?`<div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:2px">Ver finanças de</div><div class="pswitch-m" style="grid-column:1/-1;margin:0 0 6px">${pbtns()}</div><div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600">${UI.perfil==='casal'?'Configurações':'Telas'}</div>`:'') + VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="cores">${svg('carteira')}Cores do app</button><button class="navbtn" data-act="menu">${svg('gastos')}Personalizar menu</button><button class="navbtn" data-act="backup">${svg('cx')}Backup dos dados</button>` + (window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair</button>`:'');
 }
 function go(id){ UI.view=id; try{localStorage.setItem('fin.view',id)}catch(e){} document.getElementById('more').classList.remove('open'); renderNav(); render(); window.scrollTo(0,0); }
 
@@ -1653,6 +1663,7 @@ function renderSwitch(){
   el.innerHTML=`<div class="ph"><h6>Ver finanças de</h6><button class="iconbtn" data-act="fotos" aria-label="Trocar fotos" title="Trocar fotos">${CAM}</button></div>`+pbtns();
   const sub=document.getElementById('brand-sub'); if(sub) sub.textContent = UI.perfil==='casal' ? 'do casal' : UI.perfil==='parceiro' ? 'de '+nomeParceiro() : 'de '+meuNome();
 }
+function mBrand(){ const lg=document.querySelector('.brand svg'); const sub=document.getElementById('brand-sub'); return `<div class="mbrand">${lg?lg.outerHTML.replace('class="logo"','').replace(/logo-g/g,'logo-gm'):''}<b>Finanças</b><small>${esc(sub?sub.textContent:'')}</small></div>`; }
 function switchMobile(){ return C.on ? `<div class="pswitch-m">${pbtns()}<button class="pbtn" data-act="fotos" aria-label="Trocar fotos">${CAM}</button></div>` : ''; }
 
 /* ---- visão do casal ---- */
@@ -1912,7 +1923,7 @@ let toastT; function toast(msg){ let el=document.querySelector('.toast'); if(!el
 /* ================= render ================= */
 function render(){
   const main=document.getElementById('main');
-  if(S.ready<8 && !(UI.perfil==='casal')){ main.innerHTML=switchMobile()+'<div class="loading">Carregando…</div>'; return; }
+  if(S.ready<8 && !(UI.perfil==='casal')){ main.innerHTML=mBrand()+switchMobile()+'<div class="loading">Carregando…</div>'; return; }
   pickMonth();
   // keep focus on inline inputs across re-render
   const ae=document.activeElement; const key = ae && ae.id ? '#'+ae.id : (ae && ae.dataset && ae.dataset.item ? `[data-item="${ae.dataset.item}"][data-f="${ae.dataset.f}"]` : null);
@@ -1920,7 +1931,7 @@ function render(){
   if(UI.perfil==='casal' && !UI.view.startsWith('casal')) UI.view='casal';
   if(UI.perfil!=='casal' && UI.view.startsWith('casal')) UI.view='inicio';
   const _cn = UI.perfil!=='casal' ? nomeView(UI.view) : null;
-  main.innerHTML = switchMobile() + (readonlyView()?`<div class="banner" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span>👀 Você está vendo as finanças de <b>${esc(nomeParceiro())}</b>. Só ${esc(nomeParceiro())} pode alterar.</span><button class="btn sm" data-perfil="eu">Voltar para as minhas</button></div>`:'') + (V[UI.view]||vInicio)();
+  main.innerHTML = mBrand() + switchMobile() + (readonlyView()?`<div class="banner" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span>👀 Você está vendo as finanças de <b>${esc(nomeParceiro())}</b>. Só ${esc(nomeParceiro())} pode alterar.</span><button class="btn sm" data-perfil="eu">Voltar para as minhas</button></div>`:'') + (V[UI.view]||vInicio)();
   if(_cn){ const h1=main.querySelector('.top h1'); if(h1) h1.textContent=_cn; }
   if(key && main.contains(ae)===false){ const n=main.querySelector(key); if(n && document.getElementById('modal-root').children.length===0) n.focus(); }
 }
