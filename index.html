@@ -871,11 +871,19 @@ function migrarParcelas(){
   const lst=ps.map(p=>{ if(p.inicio) return p; const b=parcBase(p); const q={...p,inicio:b.inicio}; if(Object.keys(b.juntas).length) q.juntas=b.juntas; delete q.proxQtd; return q; });
   save('cartaoinfo','geral',{...S.cinfo,parcelas:lst});
 }
+/* Em qual fatura (mês de vencimento) cai uma compra feita na data iso, conforme o fechamento do cartão */
+function cartaoDatas(card){ const c=(S.config.fechamento||{})[card]; return c&&+c.fecha?{fecha:+c.fecha,vence:+c.vence||0}:null; }
+function faturaMes(card, iso){
+  const m=String(iso||todayISO()).slice(0,7), day=+String(iso||todayISO()).slice(8,10)||1, cf=cartaoDatas(card);
+  if(!cf) return addMonth(m,1);
+  const fech = day < cf.fecha ? m : addMonth(m,1);          // mês em que essa fatura fecha
+  return (cf.vence && cf.vence <= cf.fecha) ? addMonth(fech,1) : fech;  // vence no mesmo mês ou no seguinte
+}
 function cartoesFatura(){ return [...new Set([...(S.cinfo.parcelas||[]).map(p=>p.cartao),...(S.cinfo.contas||[]).map(c=>c.cartao)])]; }
 function projecao(n){
   // n faturas a partir da do mês atual: parcelas + contas no cartão + compras à vista + estornos
   const start=thisMonth(); const ms=Array.from({length:n},(_,i)=>addMonth(start,i));
-  const cards=[...new Set([...cartoesFatura(),...(S.cartao[addMonth(start,-1)]?.compras||[]).map(c=>c.cartao)])];
+  const cards=[...new Set([...cartoesFatura(),...[addMonth(start,-1),start].flatMap(mk=>(S.cartao[mk]?.compras||[]).map(c=>c.cartao))])];
   const by={}; cards.forEach(c=>by[c]=ms.map(m=>composicaoFatura(c,m).tot));
   return {ms,by,cards};
 }
@@ -885,7 +893,7 @@ function composicaoFatura(card,F){
   const fora=((S.cinfo.fora||{})[F])||[];
   (S.cinfo.parcelas||[]).filter(p=>p.cartao===card).forEach(p=>{ const pm=parcMeses(p), n=p.valores.length; pm.forEach((m,i)=>{ if(m===F) it.push({t:'Parcela',d:`${p.desc} ${i+1}/${n}`,v:p.valores[i]}); }); });
   (S.cinfo.contas||[]).filter(c=>c.cartao===card&&!c.parcelaId).forEach(c=>it.push({t:'Conta',d:c.desc,v:fora.includes(c.id)?0:(+c.valor||0),cid:c.id,fora:fora.includes(c.id)}));
-  (S.cartao[addMonth(F,-1)]?.compras||[]).filter(c=>c.cartao===card&&!c.parcela).forEach(c=>it.push({t:'Compra',d:c.desc,v:+c.valor||0}));
+  [addMonth(F,-2),addMonth(F,-1),F].forEach(mk=>(S.cartao[mk]?.compras||[]).filter(c=>c.cartao===card&&!c.parcela&&faturaMes(card,c.data)===F).forEach(c=>it.push({t:'Compra',d:c.desc+' · '+c.data.slice(8,10)+'/'+c.data.slice(5,7),v:+c.valor||0})));
   (S.cinfo.creditos||[]).filter(c=>c.cartao===card&&c.mes===F).forEach(c=>it.push({t:'Estorno',d:c.desc,v:-(+c.valor||0),id:c.id}));
   return {it,tot:r2(sum(it,x=>x.v))};
 }
@@ -893,11 +901,12 @@ function faturasCard(){
   const prox=UI.fatMes||thisMonth(), inf=(S.cinfo.faturas||{})[prox]||{};
   const cards=cartoesFatura(), atual=prox===thisMonth();
   const nav=`<div class="monthpick"><button data-fatnav="-1" aria-label="Fatura anterior">${svg('left','width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:2"')}</button><span>${mLabel(prox)}</span><button data-fatnav="1" aria-label="Próxima fatura">${svg('right','width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:2"')}</button></div>`;
-  return `<div class="card section" style="margin-top:0;margin-bottom:14px"><div class="card-h"><div><h2>Fatura de ${MESES[+prox.slice(5)-1].toLowerCase()}${atual?' <span class="pill good" style="vertical-align:middle">este mês</span>':''}</h2><p>A fatura que vence em ${MESES[+prox.slice(5)-1].toLowerCase()}, com as compras à vista de ${MESES[+addMonth(prox,-1).slice(5)-1].toLowerCase()}. Digite o valor do app do banco para conferir.${atual?'':` <button class="btn sm ghost" style="padding:0 4px" data-fatnav="0">Voltar para ${MESES[+thisMonth().slice(5)-1].toLowerCase()}</button>`}</p></div>${nav}</div>
+  return `<div class="card section" style="margin-top:0;margin-bottom:14px"><div class="card-h"><div><h2>Fatura de ${MESES[+prox.slice(5)-1].toLowerCase()}${atual?' <span class="pill good" style="vertical-align:middle">este mês</span>':''}</h2><p>A fatura que vence em ${MESES[+prox.slice(5)-1].toLowerCase()}. Cada compra entra pela data e pelo dia de fechamento do cartão. Digite o valor do app do banco para conferir.${atual?'':` <button class="btn sm ghost" style="padding:0 4px" data-fatnav="0">Voltar para ${MESES[+thisMonth().slice(5)-1].toLowerCase()}</button>`}</p></div>${nav}</div>
     <div class="grid g2">${cards.map(c=>{ const comp=composicaoFatura(c,prox), real=inf[c], dif=real!=null?r2(real-comp.tot):null, ok=dif!=null&&Math.abs(dif)<=0.1;
       return `<div style="border:1px solid var(--line);border-radius:14px;padding:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span class="pill" style="background:${CARD_COLOR(c)};color:#fff;font-size:.8rem">${c==='MP'?'Mercado Pago':esc(c)}</span>
           ${dif==null?'<span class="pill">Informe a fatura</span>':ok?'<span class="pill good">Bate ✓</span>':`<span class="pill bad">Diferença de ${fmt(Math.abs(dif))}</span>`}</div>
+        ${(()=>{const cf=cartaoDatas(c); return cf?`<button class="btn sm ghost" style="padding:4px 0;margin-top:6px;font-weight:500" data-act="cartao-datas" data-cartao="${esc(c)}">📅 Fecha dia ${cf.fecha}${cf.vence?' · vence dia '+cf.vence:''} <span class="muted" style="margin-left:4px">editar</span></button>`:`<button class="btn sm" style="margin-top:8px;border-color:var(--gold);color:var(--gold)" data-act="cartao-datas" data-cartao="${esc(c)}">📅 Informe o dia que a fatura fecha</button>`;})()}
         <div style="display:flex;gap:12px;margin-top:12px;align-items:flex-end;flex-wrap:wrap">
           <div class="field" style="margin:0;flex:1;min-width:130px"><label for="fat-${esc(c)}">Fatura no banco</label><input id="fat-${esc(c)}" inputmode="decimal" data-fatura="${esc(c)}" data-mes="${prox}" placeholder="0,00" value="${real!=null?r2(real).toLocaleString('pt-BR',{minimumFractionDigits:2}):''}" style="font-family:var(--display);font-weight:700;font-size:1.1rem"></div>
           <div class="stat" style="flex:1;min-width:130px"><div class="lbl">Calculado no app</div><div class="val sm">${fmt(comp.tot)}</div></div></div>
@@ -976,7 +985,7 @@ function vCaixinhaCartao(){
 
 function parcelasDe(total,n){ const base=Math.floor(total/n*100)/100; const arr=Array(n).fill(base); arr[0]=r2(total-base*(n-1)); return arr; }
 function compraTemParcela(c){ return (S.cinfo.parcelas||[]).some(p=>p.compraId===c.id || (p.cartao===c.cartao && Math.abs(sum(p.valores)-c.valor)<0.05)); }
-function addParcelaDeCompra(c,tipo){ const n=parseInt(c.parcela)||1; const lst=[...(S.cinfo.parcelas||[]),{id:uid('p'),compraId:c.id,desc:c.desc,cartao:c.cartao,tipo:tipo||'limite',valores:parcelasDe(c.valor,n),pagas:0,inicio:addMonth((c.data||todayISO()).slice(0,7),1),obs:''}]; S.cinfo={...S.cinfo,parcelas:lst}; save('cartaoinfo','geral',S.cinfo); }
+function addParcelaDeCompra(c,tipo){ const n=parseInt(c.parcela)||1; const lst=[...(S.cinfo.parcelas||[]),{id:uid('p'),compraId:c.id,desc:c.desc,cartao:c.cartao,tipo:tipo||'limite',valores:parcelasDe(c.valor,n),pagas:0,inicio:faturaMes(c.cartao,c.data||todayISO()),obs:''}]; S.cinfo={...S.cinfo,parcelas:lst}; save('cartaoinfo','geral',S.cinfo); }
 function comprasParceladasSoltas(){ const out=[]; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(c=>{ if(c.parcela && !/pago/i.test(c.desc) && !compraTemParcela(c)) out.push(c); })); return out; }
 function parcForm(id){
   const p = id ? (S.cinfo.parcelas||[]).find(x=>x.id===id) : {desc:'',cartao:(S.config.cartoes||['Nubank'])[0],tipo:'limite',valores:[],pagas:0,obs:''};
@@ -985,7 +994,7 @@ function parcForm(id){
     {name:'desc',label:'O que comprou',req:true,value:p.desc},
     {type:'row',items:[{name:'cartao',label:'Cartão',type:'select',options:(S.config.cartoes||['Nubank']).map(c=>[c,c==='MP'?'Mercado Pago':c]),value:p.cartao},{name:'tipo',label:'Tipo',type:'select',options:[['limite','A pagar (vermelho)'],['guardado','Dinheiro já guardado (azul)'],['recorrente','Cai todo mês, não ocupa o limite (preto)']],value:p.tipo}]},
     {type:'row',items:[{name:'n',label:'Nº de parcelas',value:n,req:true},{name:'vp',label:'Valor de cada parcela',type:'money',value:vp?r2(vp).toLocaleString('pt-BR',{minimumFractionDigits:2}):'',req:true}]},
-    {type:'row',items:[{name:'inicio',label:'Fatura da 1ª parcela',type:'month',req:true,value:id?parcBase(p).inicio:addMonth(thisMonth(),1)},{name:'pagas',label:'Já paguei quantas',value:p.pagas}]},
+    {type:'row',items:[{name:'inicio',label:'Fatura da 1ª parcela',type:'month',req:true,value:id?parcBase(p).inicio:faturaMes(p.cartao,todayISO())},{name:'pagas',label:'Já paguei quantas',value:p.pagas}]},
     {name:'juntas',label:'Parcelas juntas na próxima fatura (antecipação)',value:id&&p.pagas<p.valores.length?(parcBase(p).juntas[parcMeses(p)[p.pagas]]||1):1},
     {name:'obs',label:'Observação (opcional)',value:p.obs||''},
   ], extra: id?`<div class="confirm"><span style="flex:1">Apagar esta compra parcelada?</span><button type="button" class="btn sm danger" data-act="apagar-parcela" data-id="${id}">Apagar</button></div>`:'',
@@ -1367,8 +1376,13 @@ const ACT = {
     ], onSubmit:v=>{ const mk=v.data.slice(0,7); const c=S.cartao[mk]?JSON.parse(JSON.stringify(S.cartao[mk])):{mes:mk,compras:[]}; const cid=uid('c'), val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor';
       c.compras.push({id:cid,data:v.data,desc:v.desc.trim(),valor:val,parcela:v.parcela,cartao:v.cartao}); save('cartao',mk,c);
       if(v.parcela){ addParcelaDeCompra({id:cid,data:v.data,desc:v.desc.trim(),valor:val,parcela:v.parcela,cartao:v.cartao},v.tipo); toast('Compra parcelada em '+v.parcela.toLowerCase()+': aparece na aba Parcelas'); }
-      else toast('Compra lançada no '+v.cartao); }});
+      else toast('Compra lançada no '+v.cartao+' · entra na fatura de '+MESES[+faturaMes(v.cartao,v.data).slice(5)-1].toLowerCase()); }});
   },
+  'cartao-datas'(d){ const c=d.cartao, cf=cartaoDatas(c)||{};
+    form({title:'Datas do '+(c==='MP'?'Mercado Pago':c), fields:[{type:'row',items:[{name:'fecha',label:'Dia que a fatura fecha',value:cf.fecha||'',req:true},{name:'vence',label:'Dia que vence',value:cf.vence||''}]}],
+      extra:`<p class="note" style="margin-top:-4px">Compras feitas antes do dia do fechamento entram na fatura que está aberta. A partir do dia do fechamento, vão para a fatura seguinte. Você encontra as duas datas no app do banco.</p>`,
+      onSubmit:v=>{ const fe=parseInt(v.fecha), ve=parseInt(v.vence)||0; if(!(fe>=1&&fe<=31)) return 'Informe um dia entre 1 e 31'; if(ve&&!(ve>=1&&ve<=31)) return 'Dia de vencimento inválido';
+        save('config','geral',{...S.config,fechamento:{...(S.config.fechamento||{}),[c]:{fecha:fe,vence:ve}}}); toast('Datas salvas'); }}); },
   'cartoes'(){
     form({title:'Meus cartões', fields:[{name:'lista',label:'Nomes separados por vírgula',value:(S.config.cartoes||[]).join(', ')}], onSubmit:v=>{ const l=v.lista.split(',').map(s=>s.trim()).filter(Boolean); if(!l.length) return 'Informe pelo menos um cartão'; save('config','geral',{...S.config,cartoes:l}); UI.cartaoFiltro='Todos'; }});
   },
