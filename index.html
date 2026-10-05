@@ -826,6 +826,7 @@ function catBlock(o,c,t){
     ${itens.length?`<div class="tbl-wrap"><table><thead><tr><th>Item</th><th class="r">Previsto</th><th class="r">Real</th><th class="r">Dif.</th><th></th></tr></thead><tbody>
     ${itens.map(i=>{const d=(+i.previsto||0)-(+i.real||0); return `<tr><td><input class="cell-input cell-name" aria-label="Nome" data-item="${i.id}" data-f="nome" value="${esc(i.nome)}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Previsto de ${esc(i.nome)}" data-item="${i.id}" data-f="previsto" value="${r2(i.previsto).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Real de ${esc(i.nome)}" data-item="${i.id}" data-f="real" value="${r2(i.real).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r ${Math.abs(d)<0.005?'muted':d>0?'pos':'neg'}" style="font-size:.82rem">${Math.abs(d)<0.005?'—':fmt(d)}</td><td style="width:34px"><button class="iconbtn" aria-label="Apagar ${esc(i.nome)}" data-del-item="${i.id}">${svg('trash')}</button></td></tr>`;}).join('')}
     </tbody></table></div>`:''}
+    ${(()=>{ const cc=(S.cinfo.contas||[]).filter(x=>!contaGuardada(x)&&x.cat&&x.cat.split('|')[0]===c.k); return cc.length?`<div style="border-top:1px solid var(--line);padding:8px 14px;background:var(--gold-soft)">${cc.map(x=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:.86rem"><span style="flex:1;min-width:0">${esc(x.desc)} <span class="muted" style="font-size:.76rem">· 💳 ${x.cartao==='MP'?'Mercado Pago':esc(x.cartao)}, todo mês</span></span><span class="num" style="font-weight:600">${fmt(x.valor)}</span></div>`).join('')}<div class="muted" style="font-size:.72rem;margin-top:2px">Pagas no cartão: já estão na fatura, não somam de novo aqui.</div></div>`:''; })()}
     <div class="add"><button class="btn sm ghost" data-act="novo-item" data-cat="${c.k}">${svg('plus')}Adicionar em ${c.n.toLowerCase()}</button></div></div>`;
 }
 
@@ -963,17 +964,25 @@ function vParcelas(){
   if(fim.length) h += `<div class="card section"><div class="card-h"><div><h2>Já quitadas</h2></div></div><div class="rows">${fim.map(p=>`<div class="row"><div class="grow"><div class="t">${esc(p.desc)}</div><div class="s">${esc(p.cartao)} · ${p.valores.length}x · total ${fmt(sum(p.valores))}</div></div><button class="btn sm ghost" data-act="editar-parcela" data-id="${p.id}">Editar</button></div>`).join('')}</div></div>`;
   return h;
 }
+const contaGuardada = c => c.guardado!==false;
+function catNome(v){ if(!v) return ''; const [k,n]=v.split('|'); return CAT[k]?CAT[k].n+' › '+n:''; }
 function vContasCartao(){
-  const cs=S.cinfo.contas||[];
+  const todas=S.cinfo.contas||[];
+  const aba = UI.contasTab || 'guardado';
+  const cs = todas.filter(c=> aba==='guardado' ? contaGuardada(c) : !contaGuardada(c));
   const cx=potesList().find(x=>x.tipo==='cartao');
   let h=cartaoHead(`<button class="btn pri" data-act="nova-conta">${svg('plus')}Nova conta</button>`);
+  const nG=todas.filter(contaGuardada).length, nS=todas.length-nG;
+  h += `<div class="seg" style="max-width:520px;margin:-4px 0 14px">${[['guardado','Com dinheiro guardado',nG],['sem','Sem dinheiro guardado',nS]].map(([k,t,n])=>`<button type="button" data-contas-tab="${k}" aria-pressed="${aba===k}">${t} <span class="muted" style="font-weight:500">${n}</span></button>`).join('')}</div>`;
   const cards=[...new Set(cs.map(c=>c.cartao))];
   const tot=sum(cs,c=>c.valor);
-  h += `<div class="card" style="background:var(--accent-soft);border:0;box-shadow:none;margin-bottom:14px"><p style="margin:0;font-size:.92rem">Estas contas são pagas com o cartão, mas o dinheiro delas já está <b>guardado na caixinha do cartão</b>, rendendo até o dia de pagar a fatura.</p></div>`;
-  h += `<div class="grid g3"><div class="card stat hero"><div class="lbl">Guardado rendendo por mês</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length} contas no cartão</div></div>${cards.slice(0,2).map(c=>`<div class="card stat"><div class="lbl">${c==='MP'?'Mercado Pago':esc(c)}</div><div class="val sm">${fmt(sum(cs.filter(x=>x.cartao===c),x=>x.valor))}</div><div class="ft">${cs.filter(x=>x.cartao===c).map(x=>esc(x.desc)).join(', ')}</div></div>`).join('')}</div>`;
-  h += `<div class="card section"><div class="card-h"><div><h2>Contas com o dinheiro guardado</h2><p>Valor que cai todo mês no cartão</p></div>${cx?`<button class="btn sm ghost" data-ctab="caixinha">Ver caixinha do cartão · ${fmt(potSaldo(cx))}</button>`:''}</div>
-  ${cs.length?`<div class="rows">${cs.map(c=>`<div class="row"><i class="dot" style="background:${CARD_COLOR(c.cartao)}"></i><div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">${c.cartao==='MP'?'Mercado Pago':esc(c.cartao)} · <span class="pos">guardado rendendo</span>${c.parcelaId?' · também em Parcelas':''}</div></div><span class="v">${fmt(c.valor)}</span><button class="btn sm ghost" data-act="editar-conta" data-id="${c.id}">Editar</button></div>`).join('')}</div>`:'<p class="muted">Nenhuma conta cadastrada.</p>'}
-  <p class="note">Quando passar uma conta nova no cartão e guardar o dinheiro, cadastre aqui e lance o valor em "Guardei para uma compra", na aba Caixinha do cartão.</p></div>`;
+  h += aba==='guardado'
+    ? `<div class="card" style="background:var(--accent-soft);border:0;box-shadow:none;margin-bottom:14px"><p style="margin:0;font-size:.92rem">Estas contas são pagas com o cartão, mas o dinheiro delas já está <b>guardado na caixinha do cartão</b>, rendendo até o dia de pagar a fatura.</p></div>`
+    : `<div class="card" style="background:var(--gold-soft);border:0;box-shadow:none;margin-bottom:14px"><p style="margin:0;font-size:.92rem">Contas fixas que caem <b>todo mês no cartão</b>, sem dinheiro separado antes. Elas entram na fatura e aparecem em <b>Gastos do mês</b>, na categoria que você escolher, com o cartão onde são pagas.</p></div>`;
+  h += `<div class="grid g3"><div class="card stat hero"><div class="lbl">${aba==='guardado'?'Guardado rendendo por mês':'Caem no cartão por mês'}</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length} ${cs.length===1?'conta':'contas'}</div></div>${cards.slice(0,2).map(c=>`<div class="card stat"><div class="lbl">${c==='MP'?'Mercado Pago':esc(c)}</div><div class="val sm">${fmt(sum(cs.filter(x=>x.cartao===c),x=>x.valor))}</div><div class="ft">${cs.filter(x=>x.cartao===c).map(x=>esc(x.desc)).join(', ')}</div></div>`).join('')}</div>`;
+  h += `<div class="card section"><div class="card-h"><div><h2>${aba==='guardado'?'Contas com o dinheiro guardado':'Contas fixas no cartão'}</h2><p>Valor que cai todo mês no cartão</p></div>${aba==='guardado'&&cx?`<button class="btn sm ghost" data-ctab="caixinha">Ver caixinha do cartão · ${fmt(potSaldo(cx))}</button>`:''}</div>
+  ${cs.length?`<div class="rows">${cs.map(c=>`<div class="row"><i class="dot" style="background:${CARD_COLOR(c.cartao)}"></i><div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">💳 ${c.cartao==='MP'?'Mercado Pago':esc(c.cartao)} · todo mês${contaGuardada(c)?' · <span class="pos">guardado rendendo</span>':''}${c.cat?' · '+esc(catNome(c.cat)):''}${c.parcelaId?' · também em Parcelas':''}</div></div><span class="v">${fmt(c.valor)}</span><button class="btn sm ghost" data-act="editar-conta" data-id="${c.id}">Editar</button></div>`).join('')}</div>`:`<p class="muted">${aba==='guardado'?'Nenhuma conta cadastrada.':'Nenhuma conta aqui ainda. Cadastre as contas que caem no cartão todo mês sem você separar o dinheiro antes (streaming, academia, celular…).'}</p>`}
+  <p class="note">${aba==='guardado'?'Quando passar uma conta nova no cartão e guardar o dinheiro, cadastre aqui e lance o valor em "Guardei para uma compra", na aba Caixinha do cartão.':'Elas aparecem em Gastos do mês só para você ver na categoria certa. Não somam de novo no total, porque já estão dentro da fatura do cartão em Contas fixas.'}</p></div>`;
   return h;
 }
 function vCaixinhaCartao(){
@@ -1021,12 +1030,19 @@ function parcForm(id){
   }});
 }
 function contaForm(id){
-  const c = id ? (S.cinfo.contas||[]).find(x=>x.id===id) : {desc:'',cartao:(S.config.cartoes||['Nubank'])[0],valor:''};
+  const aba=UI.contasTab||'guardado';
+  const c = id ? (S.cinfo.contas||[]).find(x=>x.id===id) : {desc:'',cartao:(S.config.cartoes||['Nubank'])[0],valor:'',guardado:aba==='guardado'};
+  const ops=[['','Sem categoria'],...opcoesCat()]; if(c.cat && !ops.some(o=>o[0]===c.cat)) ops.push([c.cat,catNome(c.cat)]);
+  CATS.forEach(k=>ops.push([k.k+'|*',k.n+' › + novo item com o nome da conta']));
   form({title:id?'Editar '+c.desc:'Nova conta no cartão', fields:[
     {name:'desc',label:'Conta',req:true,value:c.desc},
     {type:'row',items:[{name:'cartao',label:'Cartão',type:'select',options:(S.config.cartoes||['Nubank']).map(x=>[x,x==='MP'?'Mercado Pago':x]),value:c.cartao},{name:'valor',label:'Valor por mês',type:'money',req:true,value:c.valor?r2(c.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):''}]},
+    {name:'guardado',label:'O dinheiro dessa conta fica guardado antes?',type:'seg',options:[['sim','Sim, guardo na caixinha'],['nao','Não, só cai no cartão']],value:contaGuardada(c)?'sim':'nao'},
+    {name:'cat',label:'Categoria (aparece em Gastos do mês)',type:'select',options:ops,value:c.cat||''},
   ], extra: id?`<div class="confirm"><span style="flex:1">Apagar esta conta?</span><button type="button" class="btn sm danger" data-act="apagar-conta" data-id="${id}">Apagar</button></div>`:'',
-  onSubmit:v=>{ const q={...c,id:id||uid('c'),desc:v.desc.trim(),cartao:v.cartao,valor:r2(parseNum(v.valor))}; const lst=(S.cinfo.contas||[]).filter(x=>x.id!==q.id); lst.push(q); save('cartaoinfo','geral',{...S.cinfo,contas:lst}); toast('Salvo'); }});
+  onSubmit:v=>{ let cat=v.cat||''; if(cat.endsWith('|*')) cat=cat.split('|')[0]+'|'+v.desc.trim();
+    const q={...c,id:id||uid('c'),desc:v.desc.trim(),cartao:v.cartao,valor:r2(parseNum(v.valor)),guardado:v.guardado!=='nao'}; if(cat) q.cat=cat; else delete q.cat;
+    const lst=(S.cinfo.contas||[]).filter(x=>x.id!==q.id); lst.push(q); save('cartaoinfo','geral',{...S.cinfo,contas:lst}); UI.contasTab=q.guardado?'guardado':'sem'; toast('Salvo'); }});
 }
 
 function potCard(p){
@@ -2175,6 +2191,7 @@ document.addEventListener('click', e=>{
   const ra = t.closest('[data-rend-ano]'); if(ra){ UI.rendAno=ra.dataset.rendAno; render(); return; }
   if(t.closest('[data-provall]')){ UI.provAll=true; render(); return; }
   const mvc = t.closest('[data-mover-compra]'); if(mvc){ if(readonlyView()) return save(); const mk=mvc.dataset.mk; const c=JSON.parse(JSON.stringify(S.cartao[mk])); const x=(c.compras||[]).find(y=>y.id===mvc.dataset.moverCompra); if(!x) return; if(mvc.dataset.f) x.fatura=mvc.dataset.f; else delete x.fatura; save('cartao',mk,c); toast(mvc.dataset.f?x.desc+' foi para a fatura de '+MESES[+mvc.dataset.f.slice(5)-1].toLowerCase():x.desc+' voltou para a fatura pela data'); return; }
+  const ctb = t.closest('[data-contas-tab]'); if(ctb){ UI.contasTab=ctb.dataset.contasTab; render(); return; }
   const fn = t.closest('[data-fatnav]'); if(fn){ const d=+fn.dataset.fatnav; UI.fatMes = d? addMonth(UI.fatMes||thisMonth(),d) : thisMonth(); render(); return; }
   const ct = t.closest('[data-ctab]'); if(ct){ UI.cTab=ct.dataset.ctab; render(); return; }
   const pc = t.closest('[data-parc]'); if(pc){ const lst=(S.cinfo.parcelas||[]).map(x=>{ if(x.id!==pc.dataset.parc) return x; const d=+pc.dataset.d, pm=parcMeses(x); let q=1; if(d>0){ q=pm.filter((m,i)=>i>=x.pagas&&m===pm[x.pagas]).length||1; } else if(x.pagas>0){ q=pm.filter((m,i)=>i<x.pagas&&m===pm[x.pagas-1]).length||1; } return {...x,pagas:Math.max(0,Math.min(x.valores.length,x.pagas+d*q))}; }); save('cartaoinfo','geral',{...S.cinfo,parcelas:lst}); return; }
