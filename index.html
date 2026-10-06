@@ -837,7 +837,10 @@ function grupoInvest(it){
 }
 function investCard(o,t){
   const pc=Object.assign({longo:12,caixinhas:3},S.config.metaInvest||{});
-  const base = t.renda || t.rendaPrev; const usandoPrev = !t.renda && t.rendaPrev;
+  const fora=fontesForaInvest(); const rm=rendaMes(o);
+  const recBase=r2(sum(rm.rec.filter(r=>!fora.includes(r.fonte)),r=>r.valor)), prevBase=r2(sum(Object.entries(rm.prev).filter(([f])=>!fora.includes(f)),([,v])=>v));
+  const base = recBase || prevBase; const usandoPrev = !recBase && prevBase;
+  const tirado = fora.filter(f=>rm.rec.some(r=>r.fonte===f)||rm.prev[f]);
   const itens=(o.itens||[]).filter(i=>i.cat==='poupanca');
   const lanc={longo:0,caixinhas:0}; itens.forEach(i=>lanc[grupoInvest(i)]+=(+i.real||0));
   const bloco=(k,titulo,cor)=>{ const meta=r2(base*pc[k]/100), feito=r2(lanc[k]), falta=r2(meta-feito), ok=falta<=0.5;
@@ -845,7 +848,7 @@ function investCard(o,t){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="who"><i style="background:${cor}"></i>${titulo} · ${pc[k]}%</span>${base?(ok?'<span class="pill good">Meta batida ✓</span>':`<span class="pill warn">Faltam ${fmt(falta)}</span>`):''}</div>
       <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap"><div class="stat"><div class="lbl">Meta</div><div class="val sm">${fmt(meta)}</div></div><div class="stat"><div class="lbl">Lançado</div><div class="val sm ${ok?'pos':''}">${fmt(feito)}</div></div></div>
       <div class="bar" style="margin-top:10px"><i style="width:${meta?Math.min(100,feito/meta*100):0}%;background:${cor}"></i></div></div>`; };
-  return `<div class="card section"><div class="card-h"><div><h2>Quanto investir este mês</h2><p>${pc.longo+pc.caixinhas}% de ${fmt(base)}${usandoPrev?' (renda prevista, porque a real ainda está zerada)':' recebidos'}, comparado com o que está em "Poupança e investimentos"</p></div><button class="btn sm ghost" data-act="meta-invest">Mudar porcentagens</button></div>
+  return `<div class="card section"><div class="card-h"><div><h2>Quanto investir este mês</h2><p>${pc.longo+pc.caixinhas}% de ${fmt(base)}${usandoPrev?' (renda prevista, porque a real ainda está zerada)':' recebidos'}${tirado.length?` · sem ${tirado.map(esc).join(' e ')}`:''}, comparado com o que está em "Poupança e investimentos"</p></div><button class="btn sm ghost" data-act="meta-invest">Mudar porcentagens</button></div>
     <div class="grid g2">${bloco('longo','Investimentos de longo prazo','var(--accent)')}${bloco('caixinhas','Caixinhas','var(--gold)')}</div>
     ${itens.length?`<div style="margin-top:12px;font-size:.8rem;color:var(--muted)">Toque para trocar onde cada item conta:</div><div class="chips" style="margin-top:6px">${itens.map(i=>{const g=grupoInvest(i); return `<button class="chip" data-grupo-item="${i.id}" title="Trocar para ${g==='longo'?'caixinhas':'longo prazo'}"><span class="who"><i style="background:${g==='longo'?'var(--accent)':'var(--gold)'}"></i>${esc(i.nome)} · ${g==='longo'?'longo prazo':'caixinhas'}${+i.real?' · '+fmt(i.real):''}</span></button>`;}).join('')}</div>`:''}
   </div>`;
@@ -864,6 +867,7 @@ function rendaMes(o){
 function gravarRenda(o,rm){ o.previstas=rm.prev; o.recebidos=rm.rec; delete o.rendas; o.renda=r2(sum(rm.rec,x=>x.valor)); o.rendaPrevista=r2(sum(Object.values(rm.prev),v=>v)); return o; }
 function addRecebido(o,fonte,valor,data,desc){ const rm=rendaMes(o); rm.rec.push({id:uid('r'),data,fonte,valor:r2(valor),desc:desc||''}); return gravarRenda(o,rm); }
 function previstasDoMesAnterior(from){ if(!from) return {}; const rm=rendaMes(from); const out={}; [...new Set([...Object.keys(rm.prev),...rm.rec.map(r=>r.fonte)])].forEach(f=>{ const rec=sum(rm.rec.filter(r=>r.fonte===f),r=>r.valor); const v=f==='Saldo anterior'?0:(rec||rm.prev[f]||0); if(v) out[f]=r2(v); }); return out; }
+function fontesForaInvest(){ const m=S.config.metaInvest||{}; return Array.isArray(m.fora)?m.fora:['Transferência']; }
 function rendaCard(o){
   const rm=rendaMes(o), mk=o.mes||UI.month;
   const fs=[...new Set([...fontesRenda(),...Object.keys(rm.prev),...rm.rec.map(r=>r.fonte)])];
@@ -1660,9 +1664,12 @@ const ACT = {
   'importar-ok'(){ runImport('juntar'); },
   'importar-subst'(){ runImport('substituir'); },
   'sair'(){ if(window.__logout) window.__logout(); },
-  'meta-invest'(){ const pc=Object.assign({longo:12,caixinhas:3},S.config.metaInvest||{});
-    form({title:'Quanto investir por mês', fields:[{type:'row',items:[{name:'longo',label:'Longo prazo (% da renda)',value:pc.longo},{name:'caixinhas',label:'Caixinhas (% da renda)',value:pc.caixinhas}]}],
-      onSubmit:v=>{ save('config','geral',{...S.config,metaInvest:{longo:parseNum(v.longo),caixinhas:parseNum(v.caixinhas)}}); toast('Porcentagens salvas'); }}); },
+  'meta-invest'(){ const pc=Object.assign({longo:12,caixinhas:3},S.config.metaInvest||{}); const fora=fontesForaInvest();
+    const fs=[...new Set([...fontesRenda(),...fora])];
+    form({title:'Quanto investir por mês', fields:[{type:'row',items:[{name:'longo',label:'Longo prazo (% da renda)',value:pc.longo},{name:'caixinhas',label:'Caixinhas (% da renda)',value:pc.caixinhas}]},
+      ...fs.map((f,i)=>({name:'fx'+i,label:'Contar "'+f+'" na renda para investir',type:'check',value:!fora.includes(f)}))],
+      extra:`<p class="note" style="margin-top:-4px">Desmarque o que não é renda nova, como transferências entre contas ou o saldo que sobrou do mês anterior.</p>`,
+      onSubmit:v=>{ const nf=fs.filter((f,i)=>!v['fx'+i]); save('config','geral',{...S.config,metaInvest:{longo:parseNum(v.longo),caixinhas:parseNum(v.caixinhas),fora:nf}}); toast('Salvo'); }}); },
   'menu'(){ document.getElementById('more').classList.remove('open'); MENU_TMP=menuAtual(); menuModal(); },
   'menu-salvar'(){ lerMenuInputs(); closeModal(); save('config','geral',{...S.config,menu:{order:MENU_TMP.map(x=>x.id),hidden:MENU_TMP.filter(x=>x.hidden).map(x=>x.id),names:Object.fromEntries(MENU_TMP.filter(x=>x.name&&x.name!==x.def).map(x=>[x.id,x.name]))}}); if(menuHidden().includes(UI.view)) UI.view='inicio'; renderNav(); render(); toast('Menu salvo'); },
   'menu-padrao'(){ const c={...S.config}; delete c.menu; save('config','geral',c); renderNav(); render(); toast('Menu voltou ao padrão'); },
