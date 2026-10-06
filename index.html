@@ -1036,7 +1036,7 @@ function vParcelas(){
       </div>
       <div style="display:flex;gap:3px;margin:12px 0 10px">${p.valores.map((v,i)=>`<i title="Parcela ${i+1}: ${esc(fmt(v))}" style="flex:1;height:8px;border-radius:3px;background:${i<p.pagas?tp[1]:'var(--surface-2)'};${i<p.pagas?'opacity:.85':''}"></i>`).join('')}</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:.84rem"><b>${p.pagas}</b> de ${n} pagas${rest?` · faltam ${n-p.pagas}`:''}${rest?` · próxima na fatura de <b>${mShort(pm[p.pagas])}/${pm[p.pagas].slice(2,4)}</b>${qn>1?` (${qn} juntas)`:''}`:''}</span>
-        <span class="actions">${p.pagas>0?`<button class="btn sm ghost" data-parc="${p.id}" data-d="-1">Desfazer</button>`:''}${rest?`<button class="btn sm" data-parc="${p.id}" data-d="1">${qn>1?'Paguei '+qn+' parcelas':'Paguei 1 parcela'}</button>`:''}<button class="btn sm ghost" data-act="editar-parcela" data-id="${p.id}">Editar</button></span></div>
+        <span class="actions">${p.pagas>0?`<button class="btn sm ghost" data-parc="${p.id}" data-d="-1">Desfazer</button>`:''}${rest?`<button class="btn sm" data-parc="${p.id}" data-d="1">${qn>1?'Paguei '+qn+' parcelas':'Paguei 1 parcela'}</button>`:''}${n-p.pagas>1?`<button class="btn sm ghost" data-act="antecipar" data-id="${p.id}">Antecipar</button>`:''}<button class="btn sm ghost" data-act="editar-parcela" data-id="${p.id}">Editar</button></span></div>
     </div>`; };
   const ord={limite:0,guardado:1,recorrente:2};
   h += ativos.length?`<div class="grid g2 section">${[...ativos].sort((a,b)=>ord[a.tipo]-ord[b.tipo]||sum(parcRest(b))-sum(parcRest(a))).map(card).join('')}</div>`:`<div class="card empty section"><h3>Nenhuma parcela em aberto</h3><p>Lance compras parceladas pelo botão <b>+</b>, escolhendo o cartão e o número de parcelas.</p></div>`;
@@ -1098,7 +1098,6 @@ function parcForm(id){
     {type:'row',items:[{name:'cartao',label:'Cartão',type:'select',options:(S.config.cartoes||['Nubank']).map(c=>[c,c==='MP'?'Mercado Pago':c]),value:p.cartao},{name:'tipo',label:'Tipo',type:'select',options:[['limite','A pagar (vermelho)'],['guardado','Dinheiro já guardado (azul)'],['recorrente','Cai todo mês, não ocupa o limite (preto)']],value:p.tipo}]},
     {type:'row',items:[{name:'total',label:'Valor total da compra',type:'money',value:totP?totP.toLocaleString('pt-BR',{minimumFractionDigits:2}):'',req:true},{name:'n',label:'Nº de parcelas',value:n,req:true}]},
     {type:'row',items:[{name:'inicio',label:'Fatura da 1ª parcela',type:'month',req:true,value:id?parcBase(p).inicio:faturaMes(p.cartao,todayISO())},{name:'pagas',label:'Já paguei quantas',value:p.pagas}]},
-    {name:'juntas',label:'Parcelas juntas na próxima fatura (antecipação)',value:id&&p.pagas<p.valores.length?(parcBase(p).juntas[parcMeses(p)[p.pagas]]||1):1},
     {name:'obs',label:'Observação (opcional)',value:p.obs||''},
   ], extra: id?`<div class="confirm"><span style="flex:1">Apagar esta compra parcelada?</span><button type="button" class="btn sm danger" data-act="apagar-parcela" data-id="${id}">Apagar</button></div>`:'',
   onSubmit:v=>{
@@ -1106,7 +1105,7 @@ function parcForm(id){
     let valores = (id && p.valores.length===n && Math.abs(sum(p.valores)-tot)<0.005) ? p.valores : parcelasDe(tot,n);
     if(!/^\d{4}-\d{2}$/.test(v.inicio)) return 'Escolha a fatura da 1ª parcela';
     const q={...p,id:id||uid('p'),desc:v.desc.trim(),cartao:v.cartao,tipo:v.tipo,valores,pagas:Math.max(0,Math.min(n,parseInt(v.pagas)||0)),inicio:v.inicio,obs:v.obs.trim()}; delete q.proxQtd;
-    const jt={...(id?parcBase(p).juntas:{})}; q.juntas=jt; if(q.pagas<n){ const m=parcMeses(q)[q.pagas]; const jq=Math.max(1,parseInt(v.juntas)||1); if(jq>1) jt[m]=jq; else delete jt[m]; } if(!Object.keys(jt).length) delete q.juntas;
+    const jt={...(id?parcBase(p).juntas:{})}; if(Object.keys(jt).length) q.juntas=jt; else delete q.juntas;
     const lst=(S.cinfo.parcelas||[]).filter(x=>x.id!==q.id); lst.push(q);
     save('cartaoinfo','geral',{...S.cinfo,parcelas:lst}); toast(id?'Salvo':'Compra parcelada adicionada');
   }});
@@ -1600,6 +1599,21 @@ const ACT = {
     if(faltam.length) setTimeout(()=>toast('Crie uma aplicação em '+faltam.join(', ')+' para registrar essa parte'),2600);
   },
   'nova-parcela'(){ parcForm(null); },
+  'antecipar'(d){ const p=(S.cinfo.parcelas||[]).find(x=>x.id===d.id); if(!p) return; const b=parcBase(p), pm=parcMeses(p), n=p.valores.length;
+    const meses=[...new Set(pm.filter((m,i)=>i>=p.pagas))];
+    const restDe=m=>pm.filter((x,i)=>i>=p.pagas&&x>=m).length;
+    const ja=Object.entries(b.juntas).filter(([,q])=>q>1);
+    form({title:'Antecipar · '+p.desc, fields:[
+      {name:'mes',label:'Em qual fatura',type:'select',options:meses.map(m=>[m,'Fatura de '+mLabel(m).toLowerCase()+(m===thisMonth()?' (este mês)':m===addMonth(thisMonth(),1)?' (mês que vem)':'')]),value:meses.includes(addMonth(thisMonth(),1))?addMonth(thisMonth(),1):meses[0]},
+      {name:'qtd',label:'Quantas parcelas vão cair juntas nessa fatura',type:'select',options:Array.from({length:Math.max(1,n-p.pagas)},(_,i)=>[String(i+1),i===0?'1 (sem antecipar)':(i+1)+' parcelas']),value:'2'},
+    ], extra:`<p class="note" style="margin-top:-4px">As parcelas que sobrarem continuam uma por mês depois dessa fatura.</p>${ja.length?`<div class="note" style="margin-top:6px"><b>Antecipações já marcadas:</b> ${ja.map(([m,q])=>`${q} parcelas na fatura de ${mLabel(m).toLowerCase()}`).join(' · ')}. Para desfazer, escolha a fatura e coloque 1.</div>`:''}`,
+    onSubmit:v=>{ const q=Math.max(1,parseInt(v.qtd)||1); if(q>restDe(v.mes)) return 'Só faltam '+restDe(v.mes)+' parcelas a partir dessa fatura';
+      const jt={...b.juntas}; if(q>1) jt[v.mes]=q; else delete jt[v.mes];
+      const lst=(S.cinfo.parcelas||[]).map(x=>{ if(x.id!==p.id) return x; const y={...x,inicio:b.inicio}; delete y.proxQtd; if(Object.keys(jt).length) y.juntas=jt; else delete y.juntas; return y; });
+      save('cartaoinfo','geral',{...S.cinfo,parcelas:lst});
+      const fim=parcMeses({...p,inicio:b.inicio,juntas:jt}).slice(-1)[0];
+      toast(q>1?`${q} parcelas na fatura de ${mLabel(v.mes).toLowerCase()} · termina em ${mLabel(fim).toLowerCase()}`:'Antecipação desfeita'); }});
+  },
   'editar-parcela'(d){ parcForm(d.id); },
   'apagar-parcela'(d){ save('cartaoinfo','geral',{...S.cinfo,parcelas:(S.cinfo.parcelas||[]).filter(x=>x.id!==d.id)}); toast('Apagada'); },
   'nova-conta'(){ const cards=S.config.cartoes||['Nubank']; gastoRapido({recorrente:true,forma:'card:'+cards[0],guardado:(UI.contasTab||'guardado')==='guardado'}); },
