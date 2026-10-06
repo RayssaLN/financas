@@ -1025,6 +1025,18 @@ function composicaoFatura(card,F){
   (S.cinfo.creditos||[]).filter(c=>c.cartao===card&&c.mes===F).forEach(c=>it.push({t:'Estorno',d:c.desc,v:-(+c.valor||0),id:c.id}));
   return {it,tot:r2(sum(it,x=>x.v))};
 }
+function lancarNoGasto(cat,nome,val,data,desc){
+  // soma no Real do item (cria se não existir) e registra na lista do mês; devolve a referência para desfazer
+  const mk=data.slice(0,7); const o=orcPara(mk); o.itens=o.itens||[]; o.avulsos=o.avulsos||[];
+  let it=itemPorNome(o,cat,nome); if(!it){ it={id:uid('i'),cat,nome,previsto:0,real:0}; o.itens.push(it); }
+  it.real=r2((+it.real||0)+val); const aid=uid('a'); o.avulsos.push({id:aid,data,desc:desc||nome,valor:val,forma:'pix',cat,itemId:it.id});
+  save('orcamento',mk,o); return {mes:mk,item:it.id,avulso:aid,valor:val};
+}
+function tirarDoGasto(ref){
+  if(!ref||!ref.mes||!S.orc[ref.mes]) return; const o=JSON.parse(JSON.stringify(S.orc[ref.mes]));
+  const it=(o.itens||[]).find(x=>x.id===ref.item); if(it) it.real=r2(Math.max(0,(+it.real||0)-ref.valor));
+  o.avulsos=(o.avulsos||[]).filter(a=>a.id!==ref.avulso); save('orcamento',ref.mes,o);
+}
 function pagFaturaBox(c,F,total){
   const reg=((S.cinfo.pagas||{})[F]||{})[c], k=c+'|'+F, nome=c==='MP'?'Mercado Pago':c;
   const cxOf=r=>r.cx!=null?r.cx:(r.caixinha?r.valor:0), outOf=r=>r.outro!=null?r.outro:(r.caixinha?0:r.valor);
@@ -1646,12 +1658,12 @@ const ACT = {
       {name:'tipo',label:'Tipo',type:'seg',options:[['aporte','Guardar'],['resgate','Resgatar'],['rendimento','Rendimento']],value:d.tipo||'aporte'},
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
       {name:'obs',label:'Observação (opcional)'},
-      {name:'lancar',label:'Também lançar em "Poupança e investimentos" nos gastos do mês (só para aportes)',type:'check',value:!(d.pote&&S.potes[d.pote]&&S.potes[d.pote].tipo==='cartao')},
+      {name:'lancar',label:'Descontar do saldo (entra em "Poupança e investimentos" nos gastos do mês, só quando guardar)',type:'check',value:!(d.pote&&S.potes[d.pote]&&S.potes[d.pote].tipo==='cartao')},
     ], onSubmit:v=>{
       const val=parseNum(v.valor); if(!val) return 'Informe um valor';
-      const p=JSON.parse(JSON.stringify(S.potes[v.pote])); p.movimentos=p.movimentos||[]; p.movimentos.push({id:uid('m'),data:v.data,tipo:v.tipo,valor:val,obs:v.obs.trim()});
-      save('potes',v.pote,p);
-      if(v.tipo==='aporte' && v.lancar){ const mk=v.data.slice(0,7); const o=ensureOrc(mk); const ex=o.itens.find(i=>i.cat==='poupanca'&&i.nome.toLowerCase()===p.nome.toLowerCase()); if(ex) ex.real=r2((+ex.real||0)+val); else o.itens.push({id:uid('i'),cat:'poupanca',nome:p.nome,previsto:0,real:val}); save('orcamento',mk,o); }
+      const p=JSON.parse(JSON.stringify(S.potes[v.pote])); p.movimentos=p.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,obs:v.obs.trim()};
+      if(v.tipo==='aporte' && v.lancar) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
+      p.movimentos.push(mv); save('potes',v.pote,p);
       toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado':'Rendimento lançado');
     }});
   },
@@ -2147,7 +2159,9 @@ Object.assign(ACT, {
       {name:'tipo',label:'Tipo',type:'seg',options:[['aporte','Guardar'],['resgate','Retirar'],['rendimento','Rendimento']],value:'aporte'},
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
       {name:'obs',label:'Observação (opcional)'}],
-    onSubmit:v=>{ const val=parseNum(v.valor); if(!val) return 'Informe um valor'; const q=JSON.parse(JSON.stringify(p)); q.movimentos=q.movimentos||[]; q.movimentos.push({id:uid('m'),data:v.data,tipo:v.tipo,valor:val,quem:v.quem,obs:v.obs.trim()}); saveCasal(d.id,q); setTimeout(()=>openCxCasal(d.id),30); toast('Salvo na caixinha do casal'); }});
+    onSubmit:v=>{ const val=parseNum(v.valor); if(!val) return 'Informe um valor'; const q=JSON.parse(JSON.stringify(p)); q.movimentos=q.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,quem:v.quem,obs:v.obs.trim()};
+      if(v.tipo==='aporte'&&v.quem===C.me) mv.gasto=lancarNoGasto('poupanca',p.nome+' (casal)',r2(val),v.data,'Guardado em '+p.nome+' (casal)');
+      q.movimentos.push(mv); saveCasal(d.id,q); setTimeout(()=>openCxCasal(d.id),30); toast('Salvo na caixinha do casal'+(mv.gasto?' · '+fmt(val)+' descontado do seu saldo':'')); }});
   },
 });
 function cxCasalForm(id){
@@ -2614,7 +2628,7 @@ document.addEventListener('click', e=>{
   const mv = t.closest('[data-menu-mv]'); if(mv){ lerMenuInputs(); const i=+mv.dataset.i, j=i+(+mv.dataset.menuMv); if(j>=0&&j<MENU_TMP.length){ [MENU_TMP[i],MENU_TMP[j]]=[MENU_TMP[j],MENU_TMP[i]]; menuModal(); } return; }
   const dro = t.closest('[data-del-role]'); if(dro){ saveFundo({...C.fundo,lancamentos:(C.fundo.lancamentos||[]).filter(l=>l.id!==dro.dataset.delRole)}); return; }
   if(t.closest('[data-roleall]')){ UI.roleAll=true; render(); return; }
-  const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
+  const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); const mvd=q.movimentos.find(m=>m.id===dmc.dataset.delMovCasal); if(mvd&&mvd.gasto&&mvd.quem===C.me) tirarDoGasto(mvd.gasto); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
   const goB = t.closest('[data-go]'); if(goB){ go(goB.dataset.go); return; }
   if(t.closest('[data-more]')){ document.getElementById('more').classList.toggle('open'); return; }
   if(t.id==='more'){ t.classList.remove('open'); return; }
@@ -2629,7 +2643,7 @@ document.addEventListener('click', e=>{
     ACT[act.dataset.act] && ACT[act.dataset.act]({...act.dataset}); return;
   }
   const pp = t.closest('[data-pal-pick]'); if(pp){ const k=pp.dataset.palPick; applyPal(k); save('config','geral',{...S.config,paleta:k}); ACT.cores(); toast('Cores: '+PALETTES[k].n); return; }
-  const pt = t.closest('[data-pote]'); if(pt){ openPote(pt.dataset.pote); return; }
+  const pt = t.closest('[data-pote]'); if(pt && !pt.hasAttribute('data-del-mov')){ openPote(pt.dataset.pote); return; }
   const fo = t.closest('[data-fora]'); if(fo){ const m=UI.fatMes||thisMonth(); const f=JSON.parse(JSON.stringify(S.cinfo.fora||{})); const l=f[m]||[]; const id=fo.dataset.fora; f[m]= l.includes(id)? l.filter(x=>x!==id) : [...l,id]; save('cartaoinfo','geral',{...S.cinfo,fora:f}); return; }
   const dca = t.closest('[data-del-compra-ativo]'); if(dca){ const id=dca.dataset.pote; const x=JSON.parse(JSON.stringify(S.potes[id])); const c=x.compras[+dca.dataset.delCompraAtivo]; x.compras.splice(+dca.dataset.delCompraAtivo,1); const mi=x.movimentos.findIndex(m=>m.data===c.data&&Math.abs(m.valor-c.valor)<0.005&&(m.tipo==='aporte'||m.tipo==='resgate')); if(mi>=0) x.movimentos.splice(mi,1); save('potes',id,x); openPote(id); return; }
   const dmz = t.closest('[data-del-mz]'); if(dmz){ save('meliuz','registro',{...S.meliuz,lancamentos:(S.meliuz.lancamentos||[]).filter(x=>x.id!==dmz.dataset.delMz)}); return; }
@@ -2644,15 +2658,20 @@ document.addEventListener('click', e=>{
     if(!cx&&!out){ toast('Informe quanto pagou'); return; }
     const pg=JSON.parse(JSON.stringify(S.cinfo.pagas||{})), old=(pg[F]||{})[card]; const nm=card==='MP'?'Mercado Pago':card;
     if(old&&old.mov&&S.potes[old.pote]){ const q=JSON.parse(JSON.stringify(S.potes[old.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==old.mov); S.potes[old.pote]=q; save('potes',old.pote,q); }
+    if(old&&old.gasto) tirarDoGasto(old.gasto);
     const reg={valor:r2(cx+out),cx,outro:out,data:(old&&old.data)||todayISO()};
+    // a parte paga "de outro jeito" saiu da conta: desconta do saldo em Contas fixas › Cartão X (a parte da caixinha já foi descontada quando você guardou)
+    if(out){ const nomeItem=(()=>{ const o=S.orc[reg.data.slice(0,7)]||orcPara(reg.data.slice(0,7)); const alvo=[semAcento('Cartão '+card),semAcento('Cartão '+nm)]; const it=(o.itens||[]).find(i=>i.cat==='fixos'&&alvo.includes(semAcento(i.nome))); return it?it.nome:'Cartão '+card; })();
+      reg.gasto=lancarNoGasto('fixos',nomeItem,out,reg.data,'Fatura '+nm+' de '+MESES[+F.slice(5)-1].toLowerCase()); }
     if(cx){ const p=potesList().find(p=>p.tipo==='cartao'); if(p){ const q=JSON.parse(JSON.stringify(S.potes[p.id])); const mid=uid('m'); q.movimentos=q.movimentos||[]; q.movimentos.push({id:mid,data:reg.data,tipo:'resgate',valor:cx,obs:'Pagamento da fatura '+nm+' de '+MESES[+F.slice(5)-1].toLowerCase()}); save('potes',p.id,q); reg.pote=p.id; reg.mov=mid; } }
     // parcelas deste cartão que caem até esta fatura passam a contar como pagas (guarda como estavam para poder desfazer)
     const antes=(old&&old.parcAntes)||{}; let nParc=0;
     const parcs=(S.cinfo.parcelas||[]).map(pp=>{ if(pp.cartao!==card) return pp; const ate=parcMeses(pp).filter(m=>m<=F).length; if(ate<=(+pp.pagas||0)) return pp; if(!(pp.id in antes)) antes[pp.id]=+pp.pagas||0; nParc++; return {...pp,pagas:Math.min(ate,pp.valores.length)}; });
     if(Object.keys(antes).length) reg.parcAntes=antes;
-    (pg[F]=pg[F]||{})[card]=reg; if(UI.editPag) delete UI.editPag[card+'|'+F]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Fatura '+nm+' paga'+(cx?' · '+fmt(cx)+' saiu da caixinha':'')+(nParc?' · '+nParc+(nParc===1?' parcelamento atualizado':' parcelamentos atualizados'):'')); return; }
+    (pg[F]=pg[F]||{})[card]=reg; if(UI.editPag) delete UI.editPag[card+'|'+F]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Fatura '+nm+' paga'+(cx?' · '+fmt(cx)+' saiu da caixinha':'')+(out?' · '+fmt(out)+' descontado do saldo':'')+(nParc?' · '+nParc+(nParc===1?' parcelamento atualizado':' parcelamentos atualizados'):'')); return; }
   const dp = t.closest('[data-despagar]'); if(dp){ if(readonlyView()) return save(); const card=dp.dataset.despagar, F=dp.dataset.mes; const pg=JSON.parse(JSON.stringify(S.cinfo.pagas||{})); const r=(pg[F]||{})[card];
     if(r&&r.mov&&S.potes[r.pote]){ const q=JSON.parse(JSON.stringify(S.potes[r.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==r.mov); save('potes',r.pote,q); }
+    if(r&&r.gasto) tirarDoGasto(r.gasto);
     let parcs=S.cinfo.parcelas||[]; if(r&&r.parcAntes) parcs=parcs.map(pp=>pp.id in r.parcAntes?{...pp,pagas:r.parcAntes[pp.id]}:pp);
     if(pg[F]) delete pg[F][card]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Pagamento desfeito'); return; }
   const ep1=t.closest('[data-empr-pagar]'); if(ep1){ if(readonlyView()) return save(); emprPagar(ep1.dataset.emprPagar); return; }
@@ -2690,7 +2709,7 @@ document.addEventListener('click', e=>{
   const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
   const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); const del=c.compras.find(x=>x.id===dc.dataset.delCompra); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if(del&&del.guardado) tirarDaCaixinha(del); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
   const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
-  const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
+  const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); const mvd=p.movimentos.find(m=>m.id===dm.dataset.delMov); if(mvd&&mvd.gasto) tirarDoGasto(mvd.gasto); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
   const cs = t.closest('[data-cb-status]'); if(cs){ const nx={pendente:'confirmado',confirmado:'resgatado',resgatado:'pendente'}; const m={...S.meliuz,itens:S.meliuz.itens.map(x=>x.id===cs.dataset.cbStatus?{...x,status:nx[x.status]}:x)}; save('meliuz','registro',m); return; }
   const dcb = t.closest('[data-del-cb]'); if(dcb){ save('meliuz','registro',{...S.meliuz,itens:S.meliuz.itens.filter(x=>x.id!==dcb.dataset.delCb)}); return; }
 });
