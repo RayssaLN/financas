@@ -958,7 +958,7 @@ function parcBase(p){
   const A=thisMonth(), j={...(p.juntas||{})}; if(+p.proxQtd>1 && p.pagas<p.valores.length) j[A]=+p.proxQtd;
   return {inicio:addMonth(A,-(+p.pagas||0)), juntas:j};
 }
-function parcMeses(p){ const b=parcBase(p), n=p.valores.length, out=[]; let c=b.inicio; while(out.length<n){ const q=Math.max(1,+b.juntas[c]||1); for(let k=0;k<q&&out.length<n;k++) out.push(c); c=addMonth(c,1); } return out; }
+function parcMeses(p){ const b=parcBase(p), n=p.valores.length, out=[]; let c=b.inicio, guarda=0; while(out.length<n && guarda++<600){ const j=b.juntas[c]; const q= j===undefined ? 1 : Math.max(0,+j||0); for(let k=0;k<q&&out.length<n;k++) out.push(c); c=addMonth(c,1); } return out; }
 function migrarParcelas(){
   if(readonlyView() || VIEW_DB!==db) return;
   const ps=S.cinfo.parcelas||[]; if(!ps.some(p=>!p.inicio)) return;
@@ -985,7 +985,7 @@ function composicaoFatura(card,F){
   // fatura que vence no mês F = parcelas daquele mês + contas no cartão + compras à vista do mês anterior + estornos
   F=F||thisMonth(); const it=[];
   const fora=((S.cinfo.fora||{})[F])||[];
-  (S.cinfo.parcelas||[]).filter(p=>p.cartao===card).forEach(p=>{ const pm=parcMeses(p), n=p.valores.length; pm.forEach((m,i)=>{ if(m===F) it.push({t:'Parcela',d:`${p.desc} ${i+1}/${n}`,v:p.valores[i]}); }); });
+  (S.cinfo.parcelas||[]).filter(p=>p.cartao===card).forEach(p=>{ const pm=parcMeses(p), n=p.valores.length; const jb=parcBase(p).juntas; let veio=jb[addMonth(F,-1)]===0; pm.forEach((m,i)=>{ if(m===F){ it.push({t:'Parcela',d:`${p.desc} ${i+1}/${n}`,v:p.valores[i],pid:p.id,veio}); veio=false; } }); });
   (S.cinfo.contas||[]).filter(c=>c.cartao===card&&!c.parcelaId&&(!c.desde||F>=c.desde)).forEach(c=>it.push({t:'Conta',d:c.desc,v:fora.includes(c.id)?0:(+c.valor||0),cid:c.id,fora:fora.includes(c.id)}));
   [addMonth(F,-3),addMonth(F,-2),addMonth(F,-1),F].forEach(mk=>(S.cartao[mk]?.compras||[]).filter(c=>c.cartao===card&&!c.parcela&&(c.fatura||faturaMes(card,c.data))===F).forEach(c=>it.push({t:'Compra',d:c.desc+' · '+c.data.slice(8,10)+'/'+c.data.slice(5,7),v:+c.valor||0,compra:c.id,mk,movida:!!c.fatura&&c.fatura!==faturaMes(card,c.data)})));
   (S.cinfo.creditos||[]).filter(c=>c.cartao===card&&c.mes===F).forEach(c=>it.push({t:'Estorno',d:c.desc,v:-(+c.valor||0),id:c.id}));
@@ -1006,7 +1006,7 @@ function faturasCard(){
           <div class="stat" style="flex:1;min-width:130px"><div class="lbl">Calculado no app</div><div class="val sm">${fmt(comp.tot)}</div></div></div>
         ${dif!=null&&!ok?`<p style="margin:10px 0 0;font-size:.82rem" class="${dif<0?'neg':'neg'}">${dif<0?`O app somou ${fmt(-dif)} a mais que o banco. Confira se alguma compra ou conta abaixo ainda não caiu nesta fatura.`:`O banco cobrou ${fmt(dif)} a mais do que está lançado aqui. Pode faltar alguma compra.`}</p>`:''}
         <details style="margin-top:10px"><summary style="cursor:pointer;font-size:.84rem;font-weight:600;color:var(--ink-2)">Ver o que compõe (${comp.it.length} itens)</summary>
-          <div class="rows" style="margin-top:6px">${comp.it.map(x=>`<div class="row" style="padding:6px 0;font-size:.86rem"><span class="pill ${x.t==='Estorno'?'good':''}" style="min-width:62px;justify-content:center">${x.t}</span><div class="grow">${esc(x.d)}</div><span class="v ${x.v<0?'pos':''}" style="${x.fora?'text-decoration:line-through;color:var(--muted)':''}">${fmt(x.fora?(S.cinfo.contas.find(c=>c.id===x.cid)||{}).valor:x.v)}</span>${x.compra?(x.movida?`<span class="pill warn" style="margin-left:6px">Movida</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-mover-compra="${x.compra}" data-mk="${x.mk}" data-f="">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-mover-compra="${x.compra}" data-mk="${x.mk}" data-f="${addMonth(prox,1)}" aria-label="Mover ${esc(x.d)} para a próxima fatura" title="O banco jogou para a próxima fatura"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 7l5 5-5 5"/></svg></button>`):''}${x.cid?(x.fora?`<span class="pill bad" style="margin-left:6px">Fora desta fatura</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-fora="${x.cid}">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-fora="${x.cid}" aria-label="Tirar ${esc(x.d)} desta fatura" title="Tirar desta fatura (não caiu este mês)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`):''}${x.id?`<button class="iconbtn" aria-label="Apagar estorno" data-del-credito="${x.id}">${svg('trash')}</button>`:''}</div>`).join('')}</div></details>
+          <div class="rows" style="margin-top:6px">${comp.it.map(x=>`<div class="row" style="padding:6px 0;font-size:.86rem"><span class="pill ${x.t==='Estorno'?'good':''}" style="min-width:62px;justify-content:center">${x.t}</span><div class="grow">${esc(x.d)}</div><span class="v ${x.v<0?'pos':''}" style="${x.fora?'text-decoration:line-through;color:var(--muted)':''}">${fmt(x.fora?(S.cinfo.contas.find(c=>c.id===x.cid)||{}).valor:x.v)}</span>${x.pid?(x.veio?`<span class="pill warn" style="margin-left:6px">Veio da anterior</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-desfaz-parc="${x.pid}" data-f="${addMonth(prox,-1)}">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-mover-parc="${x.pid}" data-f="${prox}" aria-label="Mover ${esc(x.d)} para a próxima fatura" title="O banco jogou para a próxima fatura"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 7l5 5-5 5"/></svg></button>`):''}${x.compra?(x.movida?`<span class="pill warn" style="margin-left:6px">Movida</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-mover-compra="${x.compra}" data-mk="${x.mk}" data-f="">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-mover-compra="${x.compra}" data-mk="${x.mk}" data-f="${addMonth(prox,1)}" aria-label="Mover ${esc(x.d)} para a próxima fatura" title="O banco jogou para a próxima fatura"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 7l5 5-5 5"/></svg></button>`):''}${x.cid?(x.fora?`<span class="pill bad" style="margin-left:6px">Fora desta fatura</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-fora="${x.cid}">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-fora="${x.cid}" aria-label="Tirar ${esc(x.d)} desta fatura" title="Tirar desta fatura (não caiu este mês)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`):''}${x.id?`<button class="iconbtn" aria-label="Apagar estorno" data-del-credito="${x.id}">${svg('trash')}</button>`:''}</div>`).join('')}</div></details>
         <button class="btn sm ghost" style="margin-top:6px;padding-left:0" data-act="novo-credito" data-cartao="${esc(c)}">${svg('plus')}Estorno ou crédito nesta fatura</button>
       </div>`; }).join('')}</div></div>`;
 }
@@ -1602,17 +1602,20 @@ const ACT = {
   'antecipar'(d){ const p=(S.cinfo.parcelas||[]).find(x=>x.id===d.id); if(!p) return; const b=parcBase(p), pm=parcMeses(p), n=p.valores.length;
     const meses=[...new Set(pm.filter((m,i)=>i>=p.pagas))];
     const restDe=m=>pm.filter((x,i)=>i>=p.pagas&&x>=m).length;
-    const ja=Object.entries(b.juntas).filter(([,q])=>q>1);
-    form({title:'Antecipar · '+p.desc, fields:[
+    const ja=Object.entries(b.juntas).filter(([,q])=>q!==1);
+    form({title:'Antecipar ou pular · '+p.desc, fields:[
       {name:'mes',label:'Em qual fatura',type:'select',options:meses.map(m=>[m,'Fatura de '+mLabel(m).toLowerCase()+(m===thisMonth()?' (este mês)':m===addMonth(thisMonth(),1)?' (mês que vem)':'')]),value:meses.includes(addMonth(thisMonth(),1))?addMonth(thisMonth(),1):meses[0]},
-      {name:'qtd',label:'Quantas parcelas vão cair juntas nessa fatura',type:'select',options:Array.from({length:Math.max(1,n-p.pagas)},(_,i)=>[String(i+1),i===0?'1 (sem antecipar)':(i+1)+' parcelas']),value:'2'},
-    ], extra:`<p class="note" style="margin-top:-4px">As parcelas que sobrarem continuam uma por mês depois dessa fatura.</p>${ja.length?`<div class="note" style="margin-top:6px"><b>Antecipações já marcadas:</b> ${ja.map(([m,q])=>`${q} parcelas na fatura de ${mLabel(m).toLowerCase()}`).join(' · ')}. Para desfazer, escolha a fatura e coloque 1.</div>`:''}`,
-    onSubmit:v=>{ const q=Math.max(1,parseInt(v.qtd)||1); if(q>restDe(v.mes)) return 'Só faltam '+restDe(v.mes)+' parcelas a partir dessa fatura';
-      const jt={...b.juntas}; if(q>1) jt[v.mes]=q; else delete jt[v.mes];
+      {name:'qtd',label:'Quantas parcelas vão cair nessa fatura',type:'select',options:[['0','Nenhuma: o banco pulou esta fatura'],...Array.from({length:Math.max(1,n-p.pagas)},(_,i)=>[String(i+1),i===0?'1 (normal, sem antecipar)':(i+1)+' parcelas juntas'])],value:'2'},
+      {name:'juntarProx',label:'Se for "Nenhuma": jogar a parcela desta fatura para a próxima, junto com a dela',type:'check',value:true},
+    ], extra:`<p class="note" style="margin-top:-4px">As parcelas que sobrarem continuam uma por mês depois dessa fatura.</p>${ja.length?`<div class="note" style="margin-top:6px"><b>Antecipações já marcadas:</b> ${ja.map(([m,q])=>`${+q===0?'nenhuma':q+' parcelas'} na fatura de ${mLabel(m).toLowerCase()}`).join(' · ')}. Para desfazer, escolha a fatura e coloque 1.</div>`:''}`,
+    onSubmit:v=>{ const q=Math.max(0,parseInt(v.qtd)||0); if(q>restDe(v.mes)) return 'Só faltam '+restDe(v.mes)+' parcelas a partir dessa fatura';
+      const jt={...b.juntas};
+      if(q===0){ const tinha=pm.filter((x,i)=>i>=p.pagas&&x===v.mes).length||1; jt[v.mes]=0; if(v.juntarProx){ const nx=addMonth(v.mes,1); const naProx=jt[nx]===undefined?1:+jt[nx]; jt[nx]=Math.min(restDe(v.mes), naProx+tinha); if(jt[nx]===1) delete jt[nx]; } }
+      else if(q>1) jt[v.mes]=q; else delete jt[v.mes];
       const lst=(S.cinfo.parcelas||[]).map(x=>{ if(x.id!==p.id) return x; const y={...x,inicio:b.inicio}; delete y.proxQtd; if(Object.keys(jt).length) y.juntas=jt; else delete y.juntas; return y; });
       save('cartaoinfo','geral',{...S.cinfo,parcelas:lst});
       const fim=parcMeses({...p,inicio:b.inicio,juntas:jt}).slice(-1)[0];
-      toast(q>1?`${q} parcelas na fatura de ${mLabel(v.mes).toLowerCase()} · termina em ${mLabel(fim).toLowerCase()}`:'Antecipação desfeita'); }});
+      toast(q===0?`Nada na fatura de ${mLabel(v.mes).toLowerCase()}${v.juntarProx?' · '+(jt[addMonth(v.mes,1)]||1)+' na seguinte':''} · termina em ${mLabel(fim).toLowerCase()}`:q>1?`${q} parcelas na fatura de ${mLabel(v.mes).toLowerCase()} · termina em ${mLabel(fim).toLowerCase()}`:'Fatura de '+mLabel(v.mes).toLowerCase()+' com 1 parcela, normal'); }});
   },
   'editar-parcela'(d){ parcForm(d.id); },
   'apagar-parcela'(d){ save('cartaoinfo','geral',{...S.cinfo,parcelas:(S.cinfo.parcelas||[]).filter(x=>x.id!==d.id)}); toast('Apagada'); },
@@ -2461,6 +2464,13 @@ document.addEventListener('click', e=>{
   const dcr = t.closest('[data-del-credito]'); if(dcr){ save('cartaoinfo','geral',{...S.cinfo,creditos:(S.cinfo.creditos||[]).filter(x=>x.id!==dcr.dataset.delCredito)}); return; }
   const ra = t.closest('[data-rend-ano]'); if(ra){ UI.rendAno=ra.dataset.rendAno; render(); return; }
   if(t.closest('[data-provall]')){ UI.provAll=true; render(); return; }
+  const mvp = t.closest('[data-mover-parc]'), dfp = t.closest('[data-desfaz-parc]');
+  if(mvp||dfp){ if(readonlyView()) return save(); const el=mvp||dfp, pid=el.dataset.moverParc||el.dataset.desfazParc, F=el.dataset.f, nx=addMonth(F,1);
+    const lst=(S.cinfo.parcelas||[]).map(x=>{ if(x.id!==pid) return x; const b=parcBase(x), pm=parcMeses(x), jt={...b.juntas};
+      if(mvp){ const k=pm.filter(m=>m===F).length, kn=pm.filter(m=>m===nx).length; jt[F]=Math.max(0,k-1); if(jt[F]===1) delete jt[F]; jt[nx]=kn+1; }
+      else { const k=pm.filter(m=>m===nx).length; delete jt[F]; jt[nx]=Math.max(1,k-1); if(jt[nx]===1) delete jt[nx]; }
+      const y={...x,inicio:b.inicio}; delete y.proxQtd; if(Object.keys(jt).length) y.juntas=jt; else delete y.juntas; return y; });
+    save('cartaoinfo','geral',{...S.cinfo,parcelas:lst}); toast(mvp?'Parcela foi para a fatura de '+MESES[+nx.slice(5)-1].toLowerCase():'Parcela voltou para a fatura de '+MESES[+F.slice(5)-1].toLowerCase()); return; }
   const mvc = t.closest('[data-mover-compra]'); if(mvc){ if(readonlyView()) return save(); const mk=mvc.dataset.mk; const c=JSON.parse(JSON.stringify(S.cartao[mk])); const x=(c.compras||[]).find(y=>y.id===mvc.dataset.moverCompra); if(!x) return; if(mvc.dataset.f) x.fatura=mvc.dataset.f; else delete x.fatura; save('cartao',mk,c); toast(mvc.dataset.f?x.desc+' foi para a fatura de '+MESES[+mvc.dataset.f.slice(5)-1].toLowerCase():x.desc+' voltou para a fatura pela data'); return; }
   const ctb = t.closest('[data-contas-tab]'); if(ctb){ UI.contasTab=ctb.dataset.contasTab; render(); return; }
   const rfd = t.closest('[data-rf-del]'); if(rfd){ lerRendaInputs(); RTMP.splice(+rfd.dataset.rfDel,1); rendaModal(); return; }
