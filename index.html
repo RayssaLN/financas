@@ -894,7 +894,7 @@ function cartaoNaCat(o,catK){
   const add=(nome,e)=>{ const k=semAcento(nome); (por[k]=por[k]||{nome,itens:[]}).itens.push(e); };
   (S.cartao[mk]?.compras||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK).sort((a,b)=>a.data.localeCompare(b.data))
     .forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao}${x.parcela?' · '+x.parcela.toLowerCase():''} · ${x.data.slice(8,10)}/${x.data.slice(5,7)}${x.guardado?' · guardado':''}`}));
-  (S.cinfo.contas||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK&&(!x.desde||mk>=addMonth(x.desde,-1))&&!(S.cartao[mk]?.compras||[]).some(y=>!y.parcela&&y.cartao===x.cartao&&semAcento(y.desc)===semAcento(x.desc)))
+  (S.cinfo.contas||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK&&(!x.desde||mk>=addMonth(x.desde,-1))&&!(S.cartao[mk]?.compras||[]).some(y=>!y.parcela&&y.cartao===x.cartao&&semAcento(y.desc)===semAcento(x.desc))&&(!contaGuardada(x)||guardadoNoMes(x,mk)))
     .forEach(x=>add(x.desc,{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao} · todo mês${contaGuardada(x)?' · dinheiro guardado':''}`}));
   return por;
 }
@@ -1750,6 +1750,15 @@ function comprasGuardadasAbertas(){
   [addMonth(tm,-2),addMonth(tm,-1),tm].forEach(mk=>(S.cartao[mk]?.compras||[]).forEach(x=>{ if(!x.guardado) return; const F=x.fatura||faturaMes(x.cartao,x.data); if(F===faturaMes(x.cartao,todayISO())) r.push({...x,F}); }));
   return r.sort((a,b)=>a.data.localeCompare(b.data));
 }
+function dataGuardado(r){
+  if(!r) return null; if(r.data) return r.data;
+  if(r.mov&&S.potes[r.pote]){ const m=(S.potes[r.pote].movimentos||[]).find(m=>m.id===r.mov); if(m) return m.data; }
+  return null;
+}
+function guardadoNoMes(c,mk){
+  // conta com dinheiro guardado só entra nos gastos do mês em que você marcou "Guardei"
+  return Object.values(S.cinfo.guardados||{}).some(g=>{ const d=dataGuardado(g&&g[c.id]); return d&&d.slice(0,7)===mk; });
+}
 function compraDaConta(c,F){
   // compra lançada no cartão com o mesmo nome da conta recorrente, na mesma fatura: é a própria conta daquele mês
   const n=semAcento(c.desc); let achou=null;
@@ -1760,7 +1769,7 @@ function contaGuardadaNoCiclo(c){ const ci=cicloConta(c); const g=((S.cinfo.guar
 function marcarGuardado(lista){
   if(readonlyView()) return save();
   const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{}));
-  lista.forEach(c=>{ const ci=cicloConta(c); if(((g[ci]||{})[c.id])) return; const r=guardarNaCaixinhaCartao(+c.valor||0,todayISO(),'Guardado para '+c.desc+' (fatura de '+MESES[+ci.slice(5)-1].toLowerCase()+')'); (g[ci]=g[ci]||{})[c.id]=r; });
+  lista.forEach(c=>{ const ci=cicloConta(c); if(((g[ci]||{})[c.id])) return; const r=guardarNaCaixinhaCartao(+c.valor||0,todayISO(),'Guardado para '+c.desc+' (fatura de '+MESES[+ci.slice(5)-1].toLowerCase()+')'); (g[ci]=g[ci]||{})[c.id]={...r,data:todayISO()}; });
   S.cinfo={...S.cinfo,guardados:g}; save('cartaoinfo','geral',S.cinfo);
 }
 function lancarCompraCartao({desc,valor,data,cartao,parcela,tipo,cat,guardado}){
@@ -1864,7 +1873,7 @@ function menuAtual(){
 }
 function viewsVisiveis(){
   const m=S.config.menu; if(!m) return VIEWS_ALL;
-  return menuAtual().filter(v=>!v.hidden||v.id==='inicio').map(v=>({id:v.id,n:v.name,short:v.name!==v.def?v.name:v.short,i:v.i,g:m.order?'':v.g}));
+  return menuAtual().filter(v=>!v.hidden||v.id==='inicio').map(v=>({id:v.id,n:v.name,short:v.name!==v.def?v.name:v.short,i:v.i,g:v.g}));
 }
 function nomeView(id){ const n=((S.config.menu||{}).names||{})[id]; return n||null; }
 function lerMenuInputs(){ MENU_TMP.forEach(x=>{ const n=document.getElementById('mn-'+x.id), c=document.getElementById('mh-'+x.id); if(n) x.name=n.value.trim()||x.def; if(c) x.hidden=!c.checked; }); }
@@ -2473,7 +2482,7 @@ function salvarGasto(){
     const conta={id:uid('c'),desc,cartao:card,valor:val,guardado:G.guardado,cat:cat+'|'+(G.item?item:desc),desde};
     save('cartaoinfo','geral',{...S.cinfo,contas:[...(S.cinfo.contas||[]),conta]});
     const cx=potesList().find(p=>p.tipo==='cartao');
-    if(G.guardado && G.guardarAgora && cx){ const r=guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{})), ci=cicloConta(conta); (g[ci]=g[ci]||{})[conta.id]=r; S.cinfo={...S.cinfo,guardados:g}; save('cartaoinfo','geral',S.cinfo); }
+    if(G.guardado && G.guardarAgora && cx){ const r=guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{})), ci=cicloConta(conta); (g[ci]=g[ci]||{})[conta.id]={...r,data}; S.cinfo={...S.cinfo,guardados:g}; save('cartaoinfo','geral',S.cinfo); }
     if(G.desc.trim()) save('config','geral',{...S.config});
     UI.contasTab=G.guardado?'guardado':'sem';
     closeModal(); toast(desc+' agora cai todo mês no '+(card==='MP'?'Mercado Pago':card)+(G.guardado&&G.guardarAgora&&cx?' · '+fmt(val)+' guardado na caixinha':'')); return; }
@@ -2550,7 +2559,7 @@ document.addEventListener('click', e=>{
     if(pg[F]) delete pg[F][card]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Pagamento desfeito'); return; }
   const vc = t.closest('[data-virar-conta]'); if(vc){ if(readonlyView()) return save(); const mk=vc.dataset.mk; const q=JSON.parse(JSON.stringify(S.cartao[mk])); const x=q.compras.find(y=>y.id===vc.dataset.virarConta); if(!x) return;
     const F=x.fatura||faturaMes(x.cartao,x.data); const conta={id:uid('c'),desc:x.desc,cartao:x.cartao,valor:+x.valor||0,guardado:true,desde:F}; if(x.cat) conta.cat=x.cat.split('|')[0]+'|'+x.desc;
-    const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{})); (g[F]=g[F]||{})[conta.id]=x.cxMov?{pote:x.cxPote,mov:x.cxMov}:{compra:x.id};
+    const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{})); (g[F]=g[F]||{})[conta.id]=x.cxMov?{pote:x.cxPote,mov:x.cxMov,data:x.data}:{compra:x.id,data:x.data};
     q.compras=q.compras.filter(y=>y.id!==x.id); save('cartao',mk,q);
     S.cinfo={...S.cinfo,contas:[...(S.cinfo.contas||[]),conta],guardados:g}; save('cartaoinfo','geral',S.cinfo); toast(x.desc+' agora cai todo mês no '+(x.cartao==='MP'?'Mercado Pago':x.cartao)+' · já guardado este mês'); return; }
   const gd = t.closest('[data-guardar]'); if(gd){ const c=(S.cinfo.contas||[]).find(x=>x.id===gd.dataset.guardar); if(c){ marcarGuardado([c]); toast(fmt(c.valor)+' guardado para '+c.desc); } return; }
