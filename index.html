@@ -1089,8 +1089,10 @@ function vContasCartao(){
   h += aba==='guardado'
     ? `<div class="card" style="background:var(--accent-soft);border:0;box-shadow:none;margin-bottom:14px"><p style="margin:0;font-size:.92rem">Estas contas são pagas com o cartão, mas o dinheiro delas já está <b>guardado na caixinha do cartão</b>, rendendo até o dia de pagar a fatura.</p></div>`
     : `<div class="card" style="background:var(--gold-soft);border:0;box-shadow:none;margin-bottom:14px"><p style="margin:0;font-size:.92rem">Contas fixas que caem <b>todo mês no cartão</b>, sem dinheiro separado antes. Elas entram na fatura e aparecem em <b>Gastos do mês</b>, na categoria que você escolher, com o cartão onde são pagas.</p></div>`;
-  if(aba==='guardado' && cs.length){ const ciclos=[...new Set(cs.map(cicloConta))]; const feitas=cs.filter(contaGuardadaNoCiclo), falta=cs.filter(c=>!contaGuardadaNoCiclo(c));
-    const vF=sum(feitas,c=>c.valor), vT=sum(cs,c=>c.valor);
+  // compras avulsas marcadas "guardei na caixinha" que caem na fatura aberta de cada cartão
+  const cg = aba==='guardado' ? comprasGuardadasAbertas().filter(x=>!cs.some(c=>c.cartao===x.cartao&&semAcento(c.desc)===semAcento(x.desc))) : [];
+  if(aba==='guardado' && (cs.length||cg.length)){ const ciclos=[...new Set([...cs.map(cicloConta),...cg.map(x=>x.F)])].sort(); const feitas=cs.filter(contaGuardadaNoCiclo), falta=cs.filter(c=>!contaGuardadaNoCiclo(c));
+    const vF=sum(feitas,c=>c.valor)+sum(cg,x=>x.valor), vT=sum(cs,c=>c.valor)+sum(cg,x=>x.valor);
     h += `<div class="card" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap"><div><div class="lbl" style="font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600">Para a fatura de ${ciclos.map(m=>MESES[+m.slice(5)-1].toLowerCase()).join(' / ')}</div>
       <div style="font-family:var(--display);font-size:1.4rem;font-weight:700;margin-top:4px">${fmt(vF)} <span class="muted" style="font-size:.9rem;font-weight:500">guardado de ${fmt(vT)}</span></div>
       <div style="font-size:.86rem;margin-top:2px">${falta.length?`<span class="neg">Falta guardar ${fmt(vT-vF)}</span> · ${falta.map(c=>esc(c.desc)).join(', ')}`:'<span class="pos">Tudo guardado ✓</span>'}</div></div>
@@ -1098,7 +1100,8 @@ function vContasCartao(){
   h += `<div class="grid g3"><div class="card stat hero"><div class="lbl">${aba==='guardado'?'Guardado rendendo por mês':'Caem no cartão por mês'}</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length} ${cs.length===1?'conta':'contas'}</div></div>${cards.slice(0,2).map(c=>`<div class="card stat"><div class="lbl">${c==='MP'?'Mercado Pago':esc(c)}</div><div class="val sm">${fmt(sum(cs.filter(x=>x.cartao===c),x=>x.valor))}</div><div class="ft">${cs.filter(x=>x.cartao===c).map(x=>esc(x.desc)).join(', ')}</div></div>`).join('')}</div>`;
   h += `<div class="card section"><div class="card-h"><div><h2>${aba==='guardado'?'Contas com o dinheiro guardado':'Contas fixas no cartão'}</h2><p>Valor que cai todo mês no cartão</p></div>${aba==='guardado'&&cx?`<button class="btn sm ghost" data-ctab="caixinha">Ver caixinha do cartão · ${fmt(potSaldo(cx))}</button>`:''}</div>
   ${cs.length?`<div class="rows">${cs.map(c=>`<div class="row"><i class="dot" style="background:${CARD_COLOR(c.cartao)}"></i><div class="grow"><div class="t">${esc(c.desc)}</div><div class="s"><span class="emo">💳</span> ${c.cartao==='MP'?'Mercado Pago':esc(c.cartao)} · todo mês${contaGuardada(c)?' · <span class="pos">guardado rendendo</span>':''}${c.cat?' · '+esc(catNome(c.cat)):''}${c.parcelaId?' · também em Parcelas':''}</div></div><span class="v">${fmt(c.valor)}</span>${aba==='guardado'?(contaGuardadaNoCiclo(c)?`<span class="pill good" title="Guardado para a fatura de ${MESES[+cicloConta(c).slice(5)-1].toLowerCase()}">✓ guardado</span><button class="iconbtn" data-desguardar="${c.id}" aria-label="Desfazer" title="Desfazer (tira da caixinha)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:`<button class="btn sm pri" data-guardar="${c.id}">Guardei</button>`):''}<button class="btn sm ghost" data-act="editar-conta" data-id="${c.id}">Editar</button></div>`).join('')}</div>`:`<p class="muted">Nenhuma conta aqui ainda. Toque no <b>+</b>, marque <b>🔁 Conta recorrente</b> e escolha o cartão.</p>`}
-  <p class="note">${aba==='guardado'?'Depois de pagar a fatura com a caixinha, toque em "Guardei" em cada conta quando separar o dinheiro da próxima. O valor entra na caixinha do cartão. No mês seguinte as contas voltam para "Guardei" sozinhas.':'Elas aparecem em Gastos do mês só para você ver na categoria certa. Não somam de novo no total, porque já estão dentro da fatura do cartão em Contas fixas.'}</p></div>`;
+  ${cg.length?`<h3 style="margin:18px 0 4px;font-size:.95rem">Compras com o dinheiro guardado</h3><div class="rows">${cg.map(x=>`<div class="row"><i class="dot" style="background:${CARD_COLOR(x.cartao)}"></i><div class="grow"><div class="t">${esc(x.desc)}</div><div class="s"><span class="emo">💳</span> ${x.cartao==='MP'?'Mercado Pago':esc(x.cartao)} · ${x.data.slice(8,10)}/${x.data.slice(5,7)}${x.parcela?' · '+esc(x.parcela.toLowerCase()):''} · fatura de ${MESES[+x.F.slice(5)-1].toLowerCase()}${x.cat?' · '+esc(catNome(x.cat)):''}</div></div><span class="v">${fmt(x.valor)}</span><span class="pill good">✓ guardado</span></div>`).join('')}</div>`:''}
+  <p class="note">${aba==='guardado'?'Depois de pagar a fatura com a caixinha, toque em "Guardei" em cada conta quando separar o dinheiro da próxima. O valor entra na caixinha do cartão. No mês seguinte as contas voltam para "Guardei" sozinhas.':'Elas entram em Gastos do mês, no Real da categoria que você escolheu.'}</p></div>`;
   return h;
 }
 function vCaixinhaCartao(){
@@ -1742,6 +1745,11 @@ function tirarDaCaixinha(compra){
   if(i<0) return; ms.splice(i,1); save('potes',pid,q);
 }
 function cicloConta(c){ return faturaMes(c.cartao, todayISO()); }
+function comprasGuardadasAbertas(){
+  const r=[], tm=thisMonth();
+  [addMonth(tm,-2),addMonth(tm,-1),tm].forEach(mk=>(S.cartao[mk]?.compras||[]).forEach(x=>{ if(!x.guardado) return; const F=x.fatura||faturaMes(x.cartao,x.data); if(F===faturaMes(x.cartao,todayISO())) r.push({...x,F}); }));
+  return r.sort((a,b)=>a.data.localeCompare(b.data));
+}
 function compraDaConta(c,F){
   // compra lançada no cartão com o mesmo nome da conta recorrente, na mesma fatura: é a própria conta daquele mês
   const n=semAcento(c.desc); let achou=null;
