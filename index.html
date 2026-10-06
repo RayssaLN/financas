@@ -995,6 +995,23 @@ function composicaoFatura(card,F){
   (S.cinfo.creditos||[]).filter(c=>c.cartao===card&&c.mes===F).forEach(c=>it.push({t:'Estorno',d:c.desc,v:-(+c.valor||0),id:c.id}));
   return {it,tot:r2(sum(it,x=>x.v))};
 }
+function pagFaturaBox(c,F,total){
+  const reg=((S.cinfo.pagas||{})[F]||{})[c], k=c+'|'+F, nome=c==='MP'?'Mercado Pago':c;
+  const cxOf=r=>r.cx!=null?r.cx:(r.caixinha?r.valor:0), outOf=r=>r.outro!=null?r.outro:(r.caixinha?0:r.valor);
+  const box='margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:12px';
+  if(reg && !(UI.editPag||{})[k]){ const cx=cxOf(reg), out=outOf(reg);
+    return `<div style="${box};display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="pill good">Paga ✓</span><div class="grow" style="font-size:.84rem">${reg.data?'Em '+reg.data.slice(8,10)+'/'+reg.data.slice(5,7)+' · ':''}<b>${fmt(cx)}</b> da caixinha · <b>${fmt(out)}</b> de outro jeito</div>${readonlyView()?'':`<button class="btn sm ghost" style="padding:3px 8px" data-edit-pag="${esc(k)}">Editar</button><button class="btn sm ghost" style="padding:3px 8px" data-despagar="${esc(c)}" data-mes="${F}">Desfazer</button>`}</div>`; }
+  if(readonlyView()) return '';
+  const pote=potesList().find(p=>p.tipo==='cartao'), saldo=pote?Math.max(0,r2(potSaldo(pote))):0;
+  const cx0=reg?cxOf(reg):Math.min(total,saldo), out0=reg?outOf(reg):r2(Math.max(0,total-cx0));
+  const val=v=>r2(v).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  return `<div style="${box}" data-pagbox="${esc(k)}" data-total="${total}">
+    <div style="font-size:.84rem;font-weight:600;margin-bottom:8px">Como pagou a fatura ${esc(nome)}?${pote?` <span class="muted" style="font-weight:400">· caixinha tem ${fmt(saldo)}</span>`:''}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="field" style="margin:0;flex:1;min-width:120px"><label>Da caixinha</label><input inputmode="decimal" data-pcx placeholder="0,00" value="${val(cx0)}"></div>
+      <div class="field" style="margin:0;flex:1;min-width:120px"><label>De outro jeito</label><input inputmode="decimal" data-pout placeholder="0,00" value="${val(out0)}"></div></div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn sm pri" data-pagar-fatura="${esc(c)}" data-mes="${F}">Confirmar pagamento</button>${reg?`<button class="btn sm ghost" data-edit-pag="${esc(k)}">Cancelar</button>`:''}</div></div>`;
+}
 function faturasCard(){
   const prox=UI.fatMes||thisMonth(), inf=(S.cinfo.faturas||{})[prox]||{};
   const cards=cartoesFatura(), atual=prox===thisMonth();
@@ -1011,6 +1028,7 @@ function faturasCard(){
         ${dif!=null&&!ok?`<p style="margin:10px 0 0;font-size:.82rem" class="${dif<0?'neg':'neg'}">${dif<0?`O app somou ${fmt(-dif)} a mais que o banco. Confira se alguma compra ou conta abaixo ainda não caiu nesta fatura.`:`O banco cobrou ${fmt(dif)} a mais do que está lançado aqui. Pode faltar alguma compra.`}</p>`:''}
         <details style="margin-top:10px"><summary style="cursor:pointer;font-size:.84rem;font-weight:600;color:var(--ink-2)">Ver o que compõe (${comp.it.length} itens)</summary>
           <div class="rows" style="margin-top:6px">${comp.it.map(x=>`<div class="row" style="padding:6px 0;font-size:.86rem"><span class="pill ${x.t==='Estorno'?'good':''}" style="min-width:62px;justify-content:center">${x.t}</span><div class="grow">${esc(x.d)}</div><span class="v ${x.v<0?'pos':''}" style="${x.fora?'text-decoration:line-through;color:var(--muted)':''}">${fmt(x.fora?(S.cinfo.contas.find(c=>c.id===x.cid)||{}).valor:x.v)}</span>${x.pid?(x.veio?`<span class="pill warn" style="margin-left:6px">Veio da anterior</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-desfaz-parc="${x.pid}" data-f="${addMonth(prox,-1)}">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-mover-parc="${x.pid}" data-f="${prox}" aria-label="Mover ${esc(x.d)} para a próxima fatura" title="O banco jogou para a próxima fatura"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 7l5 5-5 5"/></svg></button>`):''}${x.compra?(x.movida?`<span class="pill warn" style="margin-left:6px">Movida</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-mover-compra="${x.compra}" data-mk="${x.mk}" data-f="">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-mover-compra="${x.compra}" data-mk="${x.mk}" data-f="${addMonth(prox,1)}" aria-label="Mover ${esc(x.d)} para a próxima fatura" title="O banco jogou para a próxima fatura"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 7l5 5-5 5"/></svg></button>`):''}${x.cid?(x.fora?`<span class="pill bad" style="margin-left:6px">Fora desta fatura</span><button class="btn sm ghost" style="padding:3px 8px;font-size:.72rem" data-fora="${x.cid}">Desfazer</button>`:`<button class="iconbtn" style="margin-left:2px" data-fora="${x.cid}" aria-label="Tirar ${esc(x.d)} desta fatura" title="Tirar desta fatura (não caiu este mês)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`):''}${x.id?`<button class="iconbtn" aria-label="Apagar estorno" data-del-credito="${x.id}">${svg('trash')}</button>`:''}</div>`).join('')}</div></details>
+        ${pagFaturaBox(c,prox,real!=null?r2(real):comp.tot)}
         <button class="btn sm ghost" style="margin-top:6px;padding-left:0" data-act="novo-credito" data-cartao="${esc(c)}">${svg('plus')}Estorno ou crédito nesta fatura</button>
       </div>`; }).join('')}</div></div>`;
 }
@@ -2334,6 +2352,7 @@ Object.assign(ACT,{
   'imp-cancelar'(){ IMP.linhas=[]; closeModal(); },
   'imp-salvar'(){ salvarImportacao(); },
 });
+document.addEventListener('input', e=>{ const t=e.target; if(!t.matches||!t.matches('[data-pcx]')) return; const bx=t.closest('[data-pagbox]'); const o=bx&&bx.querySelector('[data-pout]'); if(!o) return; const v=parseNum(t.value); const rest=r2(Math.max(0,(+bx.dataset.total||0)-(isFinite(v)?v:0))); o.value=rest.toLocaleString('pt-BR',{minimumFractionDigits:2}); });
 document.addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='imp-extrato' && t.files[0]){ abrirArquivoExtrato(t.files[0]); return; }
@@ -2485,9 +2504,15 @@ document.addEventListener('click', e=>{
   const dcr = t.closest('[data-del-credito]'); if(dcr){ save('cartaoinfo','geral',{...S.cinfo,creditos:(S.cinfo.creditos||[]).filter(x=>x.id!==dcr.dataset.delCredito)}); return; }
   const ra = t.closest('[data-rend-ano]'); if(ra){ UI.rendAno=ra.dataset.rendAno; render(); return; }
   if(t.closest('[data-provall]')){ UI.provAll=true; render(); return; }
-  const pfat = t.closest('[data-pagar-fatura]'); if(pfat){ const pf=pfat; if(readonlyView()) return save(); const card=pf.dataset.pagarFatura, F=pf.dataset.mes, val=r2(+pf.dataset.valor), viaCx=pf.dataset.cx==='1'; const reg={valor:val,data:todayISO(),caixinha:viaCx};
-    if(viaCx){ const cx=potesList().find(p=>p.tipo==='cartao'); if(cx){ const q=JSON.parse(JSON.stringify(S.potes[cx.id])); const mid=uid('m'); q.movimentos=q.movimentos||[]; q.movimentos.push({id:mid,data:todayISO(),tipo:'resgate',valor:val,obs:'Pagamento da fatura '+(card==='MP'?'Mercado Pago':card)+' de '+MESES[+F.slice(5)-1].toLowerCase()}); save('potes',cx.id,q); reg.pote=cx.id; reg.mov=mid; } }
-    const pg=JSON.parse(JSON.stringify(S.cinfo.pagas||{})); (pg[F]=pg[F]||{})[card]=reg; S.cinfo={...S.cinfo,pagas:pg}; save('cartaoinfo','geral',S.cinfo); toast('Fatura '+(card==='MP'?'Mercado Pago':card)+' de '+MESES[+F.slice(5)-1].toLowerCase()+' paga'+(viaCx&&reg.mov?' · '+fmt(val)+' saiu da caixinha':'')); return; }
+  const ep = t.closest('[data-edit-pag]'); if(ep){ UI.editPag=UI.editPag||{}; UI.editPag[ep.dataset.editPag]=!UI.editPag[ep.dataset.editPag]; render(); return; }
+  const pfat = t.closest('[data-pagar-fatura]'); if(pfat){ if(readonlyView()) return save(); const card=pfat.dataset.pagarFatura, F=pfat.dataset.mes, bx=pfat.closest('[data-pagbox]');
+    const n=sel=>{ const v=parseNum(bx.querySelector(sel).value); return isFinite(v)&&v>0?r2(v):0; }; const cx=n('[data-pcx]'), out=n('[data-pout]');
+    if(!cx&&!out){ toast('Informe quanto pagou'); return; }
+    const pg=JSON.parse(JSON.stringify(S.cinfo.pagas||{})), old=(pg[F]||{})[card]; const nm=card==='MP'?'Mercado Pago':card;
+    if(old&&old.mov&&S.potes[old.pote]){ const q=JSON.parse(JSON.stringify(S.potes[old.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==old.mov); S.potes[old.pote]=q; save('potes',old.pote,q); }
+    const reg={valor:r2(cx+out),cx,outro:out,data:(old&&old.data)||todayISO()};
+    if(cx){ const p=potesList().find(p=>p.tipo==='cartao'); if(p){ const q=JSON.parse(JSON.stringify(S.potes[p.id])); const mid=uid('m'); q.movimentos=q.movimentos||[]; q.movimentos.push({id:mid,data:reg.data,tipo:'resgate',valor:cx,obs:'Pagamento da fatura '+nm+' de '+MESES[+F.slice(5)-1].toLowerCase()}); save('potes',p.id,q); reg.pote=p.id; reg.mov=mid; } }
+    (pg[F]=pg[F]||{})[card]=reg; if(UI.editPag) delete UI.editPag[card+'|'+F]; S.cinfo={...S.cinfo,pagas:pg}; save('cartaoinfo','geral',S.cinfo); toast('Fatura '+nm+' paga'+(cx?' · '+fmt(cx)+' saiu da caixinha':'')); return; }
   const dp = t.closest('[data-despagar]'); if(dp){ if(readonlyView()) return save(); const card=dp.dataset.despagar, F=dp.dataset.mes; const pg=JSON.parse(JSON.stringify(S.cinfo.pagas||{})); const r=(pg[F]||{})[card];
     if(r&&r.mov&&S.potes[r.pote]){ const q=JSON.parse(JSON.stringify(S.potes[r.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==r.mov); save('potes',r.pote,q); }
     if(pg[F]) delete pg[F][card]; S.cinfo={...S.cinfo,pagas:pg}; save('cartaoinfo','geral',S.cinfo); toast('Pagamento desfeito'); return; }
