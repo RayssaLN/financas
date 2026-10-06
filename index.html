@@ -892,7 +892,12 @@ function cartaoNaCat(o,catK){
   // compras no cartão do mês + contas recorrentes no cartão, agrupadas pelo nome do item
   const mk=o.mes||UI.month, por={};
   const add=(nome,e)=>{ const k=semAcento(nome); (por[k]=por[k]||{nome,itens:[]}).itens.push(e); };
-  (S.cartao[mk]?.compras||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK).sort((a,b)=>a.data.localeCompare(b.data))
+  // compra parcelada: entra só a parcela de cada mês (1ª no mês da compra, 2ª no mês seguinte...)
+  for(let b=0;b<36;b++){ const m0=addMonth(mk,-b); (S.cartao[m0]?.compras||[]).filter(x=>x.parcela&&x.cat&&x.cat.split('|')[0]===catK).forEach(x=>{
+    const pr=(S.cinfo.parcelas||[]).find(p=>p.compraId===x.id); const n=pr?pr.valores.length:(parseInt(x.parcela)||1); if(b>=n) return;
+    const v=pr?pr.valores[b]:parcelasDe(+x.valor||0,n)[b];
+    add(x.cat.split('|')[1],{desc:x.desc,card:x.cartao,valor:+v||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao} · parcela ${b+1}/${n} · compra ${x.data.slice(8,10)}/${x.data.slice(5,7)}`}); }); }
+  (S.cartao[mk]?.compras||[]).filter(x=>!x.parcela&&x.cat&&x.cat.split('|')[0]===catK).sort((a,b)=>a.data.localeCompare(b.data))
     .forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao}${x.parcela?' · '+x.parcela.toLowerCase():''} · ${x.data.slice(8,10)}/${x.data.slice(5,7)}${x.guardado?' · guardado':''}`}));
   (S.cinfo.contas||[]).filter(x=>catDaConta(x,o).split('|')[0]===catK&&(!x.desde||mk>=addMonth(x.desde,-1))&&!(S.cartao[mk]?.compras||[]).some(y=>!y.parcela&&y.cartao===x.cartao&&semAcento(y.desc)===semAcento(x.desc))&&(!contaGuardada(x)||guardadoNoMes(x,mk)))
     .forEach(x=>add(x.desc,{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao} · todo mês${contaGuardada(x)?' · dinheiro guardado':''}`}));
