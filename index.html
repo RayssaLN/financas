@@ -354,6 +354,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
 .renda-f.vazio{background:transparent;border:1px dashed var(--line-2)}
 .renda-f.vazio .v{color:var(--muted);font-weight:500}
 @media (max-width:760px){ .renda-fontes{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px} .renda-f{padding:8px 8px} .renda-f .n{font-size:.68rem} .renda-f .v{font-size:.92rem} .renda-f .p{font-size:.66rem} }
+.card-pill .cp-nome{display:inline-block;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .card-pill{flex:none;border:0;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 8px;font-size:.74rem;font-weight:700;white-space:nowrap;cursor:pointer}
 .card-pill:hover{filter:brightness(.96)}
 .card-pill .chev{font-size:.7rem;margin-left:1px}
@@ -813,7 +814,6 @@ function vGastos(){
   </div>`;
   h += investCard(o,t);
   h += `<div class="grid g2 section">` + [0,1].map(col=>`<div class="stack">${CATS.filter((_,i)=>i%2===col).map(c=>catBlock(o,c,t)).join('')}</div>`).join('') + `</div>`;
-  if((S.cartao[mk]?.compras||[]).some(x=>x.cat) || (S.cinfo.contas||[]).some(x=>x.cat)) h += `<p class="note"><span class="emo">💳</span> mostra o que foi pago no cartão em cada item. Toque para ver as compras. Esse valor já está dentro da fatura em Contas fixas, por isso não soma de novo no Real.</p>`;
   // avulsos
   const av = [...(o.avulsos||[])].sort((a,b)=>b.data.localeCompare(a.data));
   h += `<div class="card section"><div class="card-h"><div><h2>Compras no débito, Pix e dinheiro</h2><p>Cada compra lançada aqui já soma na categoria · total ${fmt(sum(av,x=>x.valor))}</p></div><button class="btn sm" data-act="importar-extrato">Importar extrato</button></div>
@@ -893,9 +893,9 @@ function cartaoNaCat(o,catK){
   const mk=o.mes||UI.month, por={};
   const add=(nome,e)=>{ const k=semAcento(nome); (por[k]=por[k]||{nome,itens:[]}).itens.push(e); };
   (S.cartao[mk]?.compras||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK).sort((a,b)=>a.data.localeCompare(b.data))
-    .forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao}${x.parcela?' · '+x.parcela.toLowerCase():''} · ${x.data.slice(8,10)}/${x.data.slice(5,7)}${x.guardado?' · guardado':''}`}));
+    .forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao}${x.parcela?' · '+x.parcela.toLowerCase():''} · ${x.data.slice(8,10)}/${x.data.slice(5,7)}${x.guardado?' · guardado':''}`}));
   (S.cinfo.contas||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK&&(!x.desde||mk>=addMonth(x.desde,-1)))
-    .forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao} · todo mês${contaGuardada(x)?' · dinheiro guardado':''}`}));
+    .forEach(x=>add(x.desc,{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao} · todo mês${contaGuardada(x)?' · dinheiro guardado':''}`}));
   return por;
 }
 function cartaoPorItem(o){
@@ -910,13 +910,13 @@ function catBlock(o,c,t){
   const totCard = sum(Object.values(por),g=>sum(g.itens,e=>e.valor));
   const usados=new Set();
   const subRows=(g,key)=>{ const aberto=UI.abertos&&UI.abertos[key]; return aberto?g.itens.map(e=>`<tr class="card-sub"><td colspan="2">↳ ${esc(e.desc)} <span class="muted">· <span class="emo">💳</span> ${esc(e.info)}</span></td><td class="r num" style="color:var(--accent);font-weight:600">${fmt(e.valor)}</td><td colspan="2"></td></tr>`).join(''):''; };
-  const pill=(g,key)=>`<button type="button" class="card-pill" data-card-toggle="${esc(key)}" aria-expanded="${!!(UI.abertos&&UI.abertos[key])}" title="Ver as compras no cartão"><span class="emo">💳</span> ${fmt(sum(g.itens,e=>e.valor)).replace('R$ ','')} <span class="chev">${UI.abertos&&UI.abertos[key]?'▴':'▾'}</span></button>`;
+  const pill=(g,key)=>`<button type="button" class="card-pill" data-card-toggle="${esc(key)}" aria-expanded="${!!(UI.abertos&&UI.abertos[key])}" title="Ver as compras no cartão"><span class="emo">💳</span> <span class="cp-nome">${g.itens.length>1?g.itens.length+' no cartão':esc(g.itens[0].card==='MP'?'Mercado Pago':g.itens[0].card||'cartão')}</span> <span class="chev">${UI.abertos&&UI.abertos[key]?'▴':'▾'}</span></button>`;
   const linhas = itens.map(i=>{ const k=semAcento(i.nome); const g=por[k]; if(g) usados.add(k); const key=mk+'|'+c.k+'|'+k; const cg=g?r2(sum(g.itens,e=>e.valor)):0, real=r2((+i.real||0)+cg); const d=(+i.previsto||0)-real;
-    return `<tr><td><input class="cell-input cell-name" aria-label="Nome" data-item="${i.id}" data-f="nome" value="${esc(i.nome)}">${g?`<div style="padding:0 0 2px 6px">${pill(g,key)}</div>`:''}</td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Previsto de ${esc(i.nome)}" data-item="${i.id}" data-f="previsto" value="${r2(i.previsto).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Real de ${esc(i.nome)}" data-item="${i.id}" data-f="real" value="${real.toLocaleString('pt-BR',{minimumFractionDigits:2})}"${cg?` title="Inclui ${fmt(cg)} no cartão"`:''}></td><td class="r ${Math.abs(d)<0.005?'muted':d>0?'pos':'neg'}" style="font-size:.82rem">${Math.abs(d)<0.005?'—':fmt(d)}</td><td style="width:34px"><button class="iconbtn" aria-label="Apagar ${esc(i.nome)}" data-del-item="${i.id}">${svg('trash')}</button></td></tr>${g?subRows(g,key):''}`; }).join('');
+    return `<tr><td><input class="cell-input cell-name" aria-label="Nome" data-item="${i.id}" data-f="nome" value="${esc(i.nome)}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Previsto de ${esc(i.nome)}" data-item="${i.id}" data-f="previsto" value="${r2(i.previsto).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Real de ${esc(i.nome)}" data-item="${i.id}" data-f="real" value="${real.toLocaleString('pt-BR',{minimumFractionDigits:2})}"${cg?` title="Inclui ${fmt(cg)} no cartão"`:''}></td><td class="r ${Math.abs(d)<0.005?'muted':d>0?'pos':'neg'}" style="font-size:.82rem">${Math.abs(d)<0.005?'—':fmt(d)}</td><td style="width:34px"><button class="iconbtn" aria-label="Apagar ${esc(i.nome)}" data-del-item="${i.id}">${svg('trash')}</button></td></tr>`; }).join('');
   // itens que só existem no cartão (ainda sem linha no mês)
   const extras = Object.entries(por).filter(([k])=>!usados.has(k)).map(([k,g])=>{ const key=mk+'|'+c.k+'|'+k;
-    return `<tr><td><div style="padding:4px 6px 2px">${esc(g.nome)}</div><div style="padding:0 0 2px 6px">${pill(g,key)}</div></td><td class="r muted">—</td><td class="r num" style="padding-right:10px">${fmt(sum(g.itens,e=>e.valor)).replace('R$ ','')}</td><td class="r neg" style="font-size:.82rem">${fmt(-sum(g.itens,e=>e.valor))}</td><td></td></tr>${subRows(g,key)}`; }).join('');
-  return `<div class="cat"><div class="cat-h"><i class="dot" style="background:${c.c}"></i><b>${c.n}</b><span class="num">${fmt(b.real)}${totCard?` <span style="color:var(--accent);font-weight:600;font-size:.78rem">· <span class="emo">💳</span> ${fmt(totCard)} no cartão</span>`:''}</span></div>
+    const v=r2(sum(g.itens,e=>e.valor)); return `<tr><td><div style="padding:6px 8px">${esc(g.nome)}</div></td><td class="r num" style="padding-right:10px">0,00</td><td class="r num" style="padding-right:10px">${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td><td class="r neg" style="font-size:.82rem">${fmt(-v)}</td><td></td></tr>`; }).join('');
+  return `<div class="cat"><div class="cat-h"><i class="dot" style="background:${c.c}"></i><b>${c.n}</b><span class="num">${fmt(b.real)}</span></div>
     ${itens.length||extras?`<div class="tbl-wrap"><table><thead><tr><th>Item</th><th class="r">Previsto</th><th class="r">Real</th><th class="r">Dif.</th><th></th></tr></thead><tbody>${linhas}${extras}</tbody></table></div>`:''}
     <div class="add"><button class="btn sm ghost" data-act="novo-item" data-cat="${c.k}">${svg('plus')}Novo item em ${c.n.toLowerCase()}</button></div></div>`;
 }
@@ -2456,7 +2456,7 @@ function salvarGasto(){
   if(G.desc.trim()) S.config.regras={...(S.config.regras||{}),[chaveDesc(desc)]:cat+'|'+item};
   if(G.rec && G.forma.startsWith('card:')){
     const card=G.forma.slice(5), desde=faturaMes(card,data);
-    const conta={id:uid('c'),desc,cartao:card,valor:val,guardado:G.guardado,cat:cat+'|'+item,desde};
+    const conta={id:uid('c'),desc,cartao:card,valor:val,guardado:G.guardado,cat:cat+'|'+(G.item?item:desc),desde};
     save('cartaoinfo','geral',{...S.cinfo,contas:[...(S.cinfo.contas||[]),conta]});
     const cx=potesList().find(p=>p.tipo==='cartao');
     if(G.guardado && G.guardarAgora && cx){ const r=guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{})), ci=cicloConta(conta); (g[ci]=g[ci]||{})[conta.id]=r; S.cinfo={...S.cinfo,guardados:g}; save('cartaoinfo','geral',S.cinfo); }
