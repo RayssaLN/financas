@@ -748,7 +748,7 @@ function vInicio(){
   const ks = Object.keys(S.orc).sort().slice(-8);
   const hr = new Date().getHours();
   const hello = hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite';
-  let h = head(readonlyView()?`Finanças de ${esc(nomeParceiro())}`:`${hello}, ${esc(meuNome())}`, 'Tudo num lugar só', `Resumo de ${mLabel(mk).toLowerCase()}`, monthPicker());
+  let h = head(readonlyView()?`Finanças de ${esc(nomeParceiro())}`:`${hello}, ${esc(meuNome())}`, 'Tudo em um só lugar', `Resumo de ${mLabel(mk).toLowerCase()}`, monthPicker());
   if (S.offline) h += `<div class="banner">Não consegui conectar ao Firebase. Confira a internet e o arquivo firebase-config.js.</div>`;
   h += `<div class="quick">
     <button class="qa" data-act="novo-gasto">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
