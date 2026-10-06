@@ -669,6 +669,7 @@ function orcTotals(o){
   if(!o) return {renda:0,rendaPrev:0,desp:0,despPrev:0,saldo:0,saldoPrev:0,byCat:{}};
   const byCat={}; CATS.forEach(c=>byCat[c.k]={prev:0,real:0});
   (o.itens||[]).forEach(it=>{ const b=byCat[it.cat]||(byCat[it.cat]={prev:0,real:0}); b.prev+=+it.previsto||0; b.real+=+it.real||0; });
+  Object.entries(cartaoPorItem(o)).forEach(([k,v])=>{ const ck=k.split('|')[0]; (byCat[ck]||(byCat[ck]={prev:0,real:0})).real+=v; });
   const desp=sum(Object.values(byCat),b=>b.real), despPrev=sum(Object.values(byCat),b=>b.prev);
   return {renda:+o.renda||0, rendaPrev:+o.rendaPrevista||0, desp, despPrev, saldo:(+o.renda||0)-desp, saldoPrev:(+o.rendaPrevista||0)-despPrev, byCat};
 }
@@ -897,6 +898,11 @@ function cartaoNaCat(o,catK){
     .forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao} · todo mês${contaGuardada(x)?' · dinheiro guardado':''}`}));
   return por;
 }
+function cartaoPorItem(o){
+  // total no cartão por categoria|item — entra no "Real" do item
+  const r={}; CATS.forEach(c=>Object.entries(cartaoNaCat(o,c.k)).forEach(([k,g])=>{ r[c.k+'|'+k]=r2(sum(g.itens,e=>e.valor)); })); return r;
+}
+const cartaoDoItem=(o,i)=>cartaoPorItem(o)[i.cat+'|'+semAcento(i.nome)]||0;
 function catBlock(o,c,t){
   const itens = (o.itens||[]).filter(i=>i.cat===c.k);
   const b = t.byCat[c.k]||{prev:0,real:0};
@@ -905,12 +911,12 @@ function catBlock(o,c,t){
   const usados=new Set();
   const subRows=(g,key)=>{ const aberto=UI.abertos&&UI.abertos[key]; return aberto?g.itens.map(e=>`<tr class="card-sub"><td colspan="2">↳ ${esc(e.desc)} <span class="muted">· <span class="emo">💳</span> ${esc(e.info)}</span></td><td class="r num" style="color:var(--accent);font-weight:600">${fmt(e.valor)}</td><td colspan="2"></td></tr>`).join(''):''; };
   const pill=(g,key)=>`<button type="button" class="card-pill" data-card-toggle="${esc(key)}" aria-expanded="${!!(UI.abertos&&UI.abertos[key])}" title="Ver as compras no cartão"><span class="emo">💳</span> ${fmt(sum(g.itens,e=>e.valor)).replace('R$ ','')} <span class="chev">${UI.abertos&&UI.abertos[key]?'▴':'▾'}</span></button>`;
-  const linhas = itens.map(i=>{ const d=(+i.previsto||0)-(+i.real||0); const k=semAcento(i.nome); const g=por[k]; if(g) usados.add(k); const key=mk+'|'+c.k+'|'+k;
-    return `<tr><td><input class="cell-input cell-name" aria-label="Nome" data-item="${i.id}" data-f="nome" value="${esc(i.nome)}">${g?`<div style="padding:0 0 2px 6px">${pill(g,key)}</div>`:''}</td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Previsto de ${esc(i.nome)}" data-item="${i.id}" data-f="previsto" value="${r2(i.previsto).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Real de ${esc(i.nome)}" data-item="${i.id}" data-f="real" value="${r2(i.real).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r ${Math.abs(d)<0.005?'muted':d>0?'pos':'neg'}" style="font-size:.82rem">${Math.abs(d)<0.005?'—':fmt(d)}</td><td style="width:34px"><button class="iconbtn" aria-label="Apagar ${esc(i.nome)}" data-del-item="${i.id}">${svg('trash')}</button></td></tr>${g?subRows(g,key):''}`; }).join('');
+  const linhas = itens.map(i=>{ const k=semAcento(i.nome); const g=por[k]; if(g) usados.add(k); const key=mk+'|'+c.k+'|'+k; const cg=g?r2(sum(g.itens,e=>e.valor)):0, real=r2((+i.real||0)+cg); const d=(+i.previsto||0)-real;
+    return `<tr><td><input class="cell-input cell-name" aria-label="Nome" data-item="${i.id}" data-f="nome" value="${esc(i.nome)}">${g?`<div style="padding:0 0 2px 6px">${pill(g,key)}</div>`:''}</td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Previsto de ${esc(i.nome)}" data-item="${i.id}" data-f="previsto" value="${r2(i.previsto).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Real de ${esc(i.nome)}" data-item="${i.id}" data-f="real" value="${real.toLocaleString('pt-BR',{minimumFractionDigits:2})}"${cg?` title="Inclui ${fmt(cg)} no cartão"`:''}></td><td class="r ${Math.abs(d)<0.005?'muted':d>0?'pos':'neg'}" style="font-size:.82rem">${Math.abs(d)<0.005?'—':fmt(d)}</td><td style="width:34px"><button class="iconbtn" aria-label="Apagar ${esc(i.nome)}" data-del-item="${i.id}">${svg('trash')}</button></td></tr>${g?subRows(g,key):''}`; }).join('');
   // itens que só existem no cartão (ainda sem linha no mês)
   const extras = Object.entries(por).filter(([k])=>!usados.has(k)).map(([k,g])=>{ const key=mk+'|'+c.k+'|'+k;
-    return `<tr><td><div style="padding:4px 6px 2px">${esc(g.nome)}</div><div style="padding:0 0 2px 6px">${pill(g,key)}</div></td><td class="r muted">—</td><td class="r muted">—</td><td class="r muted">—</td><td></td></tr>${subRows(g,key)}`; }).join('');
-  return `<div class="cat"><div class="cat-h"><i class="dot" style="background:${c.c}"></i><b>${c.n}</b><span class="num">${fmt(b.real)}${totCard?` <span style="color:var(--accent);font-weight:600;font-size:.82rem">· <span class="emo">💳</span> ${fmt(totCard)}</span>`:''}</span></div>
+    return `<tr><td><div style="padding:4px 6px 2px">${esc(g.nome)}</div><div style="padding:0 0 2px 6px">${pill(g,key)}</div></td><td class="r muted">—</td><td class="r num" style="padding-right:10px">${fmt(sum(g.itens,e=>e.valor)).replace('R$ ','')}</td><td class="r neg" style="font-size:.82rem">${fmt(-sum(g.itens,e=>e.valor))}</td><td></td></tr>${subRows(g,key)}`; }).join('');
+  return `<div class="cat"><div class="cat-h"><i class="dot" style="background:${c.c}"></i><b>${c.n}</b><span class="num">${fmt(b.real)}${totCard?` <span style="color:var(--accent);font-weight:600;font-size:.78rem">· <span class="emo">💳</span> ${fmt(totCard)} no cartão</span>`:''}</span></div>
     ${itens.length||extras?`<div class="tbl-wrap"><table><thead><tr><th>Item</th><th class="r">Previsto</th><th class="r">Real</th><th class="r">Dif.</th><th></th></tr></thead><tbody>${linhas}${extras}</tbody></table></div>`:''}
     <div class="add"><button class="btn sm ghost" data-act="novo-item" data-cat="${c.k}">${svg('plus')}Novo item em ${c.n.toLowerCase()}</button></div></div>`;
 }
@@ -1728,6 +1734,13 @@ function guardarNaCaixinhaCartao(valor,data,obs){
   else q=JSON.parse(JSON.stringify(S.potes[id]));
   const mid=uid('m'); q.movimentos=q.movimentos||[]; q.movimentos.push({id:mid,data,tipo:'aporte',valor,obs}); save('potes',id,q); return {pote:id,mov:mid};
 }
+function tirarDaCaixinha(compra){
+  // apagou uma compra marcada como guardada: tira o valor que entrou na caixinha do cartão
+  const pid=compra.cxPote||(potesList().find(p=>p.tipo==='cartao')||{}).id; if(!pid||!S.potes[pid]) return;
+  const q=JSON.parse(JSON.stringify(S.potes[pid])); const ms=q.movimentos||[];
+  const i=compra.cxMov?ms.findIndex(m=>m.id===compra.cxMov):ms.findIndex(m=>m.tipo==='aporte'&&m.obs==='Guardado para '+compra.desc&&m.data===compra.data&&Math.abs(m.valor-compra.valor)<0.005);
+  if(i<0) return; ms.splice(i,1); save('potes',pid,q);
+}
 function cicloConta(c){ return faturaMes(c.cartao, todayISO()); }
 function contaGuardadaNoCiclo(c){ return ((S.cinfo.guardados||{})[cicloConta(c)]||{})[c.id]; }
 function marcarGuardado(lista){
@@ -2446,14 +2459,14 @@ function salvarGasto(){
     const conta={id:uid('c'),desc,cartao:card,valor:val,guardado:G.guardado,cat:cat+'|'+item,desde};
     save('cartaoinfo','geral',{...S.cinfo,contas:[...(S.cinfo.contas||[]),conta]});
     const cx=potesList().find(p=>p.tipo==='cartao');
-    if(G.guardado && G.guardarAgora && cx) guardarNaCaixinhaCartao(val,data,'Guardado para '+desc);
+    if(G.guardado && G.guardarAgora && cx){ const r=guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{})), ci=cicloConta(conta); (g[ci]=g[ci]||{})[conta.id]=r; S.cinfo={...S.cinfo,guardados:g}; save('cartaoinfo','geral',S.cinfo); }
     if(G.desc.trim()) save('config','geral',{...S.config});
     UI.contasTab=G.guardado?'guardado':'sem';
     closeModal(); toast(desc+' agora cai todo mês no '+(card==='MP'?'Mercado Pago':card)+(G.guardado&&G.guardarAgora&&cx?' · '+fmt(val)+' guardado na caixinha':'')); return; }
   if(G.forma.startsWith('card:')){
     UI.lastGuardaCompra=G.guardaCompra;
     let msg=lancarCompraCartao({desc,valor:val,data,cartao:G.forma.slice(5),parcela:G.parcela,tipo:G.guardaCompra?'guardado':'limite',cat:cat+'|'+item,guardado:G.guardaCompra});
-    if(G.guardaCompra){ guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); msg+=' · '+fmt(val)+' na caixinha'; }
+    if(G.guardaCompra){ const r=guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); const mk=data.slice(0,7), q=JSON.parse(JSON.stringify(S.cartao[mk])), x=q.compras[q.compras.length-1]; if(x){ x.cxPote=r.pote; x.cxMov=r.mov; save('cartao',mk,q); } msg+=' · '+fmt(val)+' entrou na caixinha do cartão'; }
     closeModal(); toast(msg); return; }
   const mk=data.slice(0,7); const o=orcPara(mk); o.itens=o.itens||[]; o.avulsos=o.avulsos||[];
   let it=itemPorNome(o,cat,item); if(!it){ it={id:uid('i'),cat,nome:item,previsto:0,real:0}; o.itens.push(it); }
@@ -2512,10 +2525,15 @@ document.addEventListener('click', e=>{
     if(old&&old.mov&&S.potes[old.pote]){ const q=JSON.parse(JSON.stringify(S.potes[old.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==old.mov); S.potes[old.pote]=q; save('potes',old.pote,q); }
     const reg={valor:r2(cx+out),cx,outro:out,data:(old&&old.data)||todayISO()};
     if(cx){ const p=potesList().find(p=>p.tipo==='cartao'); if(p){ const q=JSON.parse(JSON.stringify(S.potes[p.id])); const mid=uid('m'); q.movimentos=q.movimentos||[]; q.movimentos.push({id:mid,data:reg.data,tipo:'resgate',valor:cx,obs:'Pagamento da fatura '+nm+' de '+MESES[+F.slice(5)-1].toLowerCase()}); save('potes',p.id,q); reg.pote=p.id; reg.mov=mid; } }
-    (pg[F]=pg[F]||{})[card]=reg; if(UI.editPag) delete UI.editPag[card+'|'+F]; S.cinfo={...S.cinfo,pagas:pg}; save('cartaoinfo','geral',S.cinfo); toast('Fatura '+nm+' paga'+(cx?' · '+fmt(cx)+' saiu da caixinha':'')); return; }
+    // parcelas deste cartão que caem até esta fatura passam a contar como pagas (guarda como estavam para poder desfazer)
+    const antes=(old&&old.parcAntes)||{}; let nParc=0;
+    const parcs=(S.cinfo.parcelas||[]).map(pp=>{ if(pp.cartao!==card) return pp; const ate=parcMeses(pp).filter(m=>m<=F).length; if(ate<=(+pp.pagas||0)) return pp; if(!(pp.id in antes)) antes[pp.id]=+pp.pagas||0; nParc++; return {...pp,pagas:Math.min(ate,pp.valores.length)}; });
+    if(Object.keys(antes).length) reg.parcAntes=antes;
+    (pg[F]=pg[F]||{})[card]=reg; if(UI.editPag) delete UI.editPag[card+'|'+F]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Fatura '+nm+' paga'+(cx?' · '+fmt(cx)+' saiu da caixinha':'')+(nParc?' · '+nParc+(nParc===1?' parcelamento atualizado':' parcelamentos atualizados'):'')); return; }
   const dp = t.closest('[data-despagar]'); if(dp){ if(readonlyView()) return save(); const card=dp.dataset.despagar, F=dp.dataset.mes; const pg=JSON.parse(JSON.stringify(S.cinfo.pagas||{})); const r=(pg[F]||{})[card];
     if(r&&r.mov&&S.potes[r.pote]){ const q=JSON.parse(JSON.stringify(S.potes[r.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==r.mov); save('potes',r.pote,q); }
-    if(pg[F]) delete pg[F][card]; S.cinfo={...S.cinfo,pagas:pg}; save('cartaoinfo','geral',S.cinfo); toast('Pagamento desfeito'); return; }
+    let parcs=S.cinfo.parcelas||[]; if(r&&r.parcAntes) parcs=parcs.map(pp=>pp.id in r.parcAntes?{...pp,pagas:r.parcAntes[pp.id]}:pp);
+    if(pg[F]) delete pg[F][card]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Pagamento desfeito'); return; }
   const gd = t.closest('[data-guardar]'); if(gd){ const c=(S.cinfo.contas||[]).find(x=>x.id===gd.dataset.guardar); if(c){ marcarGuardado([c]); toast(fmt(c.valor)+' guardado para '+c.desc); } return; }
   if(t.closest('[data-guardar-todas]')){ const l=(S.cinfo.contas||[]).filter(c=>contaGuardada(c)&&!contaGuardadaNoCiclo(c)); marcarGuardado(l); toast(fmt(sum(l,c=>c.valor))+' guardado na caixinha do cartão'); return; }
   const dg = t.closest('[data-desguardar]'); if(dg){ if(readonlyView()) return save(); const c=(S.cinfo.contas||[]).find(x=>x.id===dg.dataset.desguardar); if(!c) return; const ci=cicloConta(c); const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{})); const r=(g[ci]||{})[c.id];
@@ -2541,7 +2559,7 @@ document.addEventListener('click', e=>{
   const ix = t.closest('[data-incx]'); if(ix){ UI.incluirCx = ix.dataset.incx==='1'; render(); return; }
   const di = t.closest('[data-del-item]'); if(di){ const o=ensureOrc(UI.month); o.itens=o.itens.filter(i=>i.id!==di.dataset.delItem); save('orcamento',UI.month,o); toast('Item apagado'); return; }
   const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
-  const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
+  const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); const del=c.compras.find(x=>x.id===dc.dataset.delCompra); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if(del&&del.guardado) tirarDaCaixinha(del); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
   const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
   const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
   const cs = t.closest('[data-cb-status]'); if(cs){ const nx={pendente:'confirmado',confirmado:'resgatado',resgatado:'pendente'}; const m={...S.meliuz,itens:S.meliuz.itens.map(x=>x.id===cs.dataset.cbStatus?{...x,status:nx[x.status]}:x)}; save('meliuz','registro',m); return; }
@@ -2549,7 +2567,7 @@ document.addEventListener('click', e=>{
 });
 document.addEventListener('change', e=>{
   const t=e.target;
-  if(t.dataset.item){ const o=ensureOrc(UI.month); const it=o.itens.find(i=>i.id===t.dataset.item); if(!it) return; const f=t.dataset.f; const nv = f==='nome'? t.value.trim() : r2(parseNum(t.value)); if(it[f]===nv) return; it[f]=nv; save('orcamento',UI.month,o); return; }
+  if(t.dataset.item){ const o=ensureOrc(UI.month); const it=o.itens.find(i=>i.id===t.dataset.item); if(!it) return; const f=t.dataset.f; let nv = f==='nome'? t.value.trim() : r2(parseNum(t.value)); if(f==='real'){ const cg=cartaoDoItem(o,it); nv=r2(Math.max(0,nv-cg)); } if(it[f]===nv){ if(f==='real') render(); return; } it[f]=nv; save('orcamento',UI.month,o); return; }
   if(t.dataset.saldoPote){ const id=t.dataset.saldoPote, p=S.potes[id]; if(!p) return; const n=r2(parseNum(t.value)), diff=r2(n-potSaldo(p)); if(Math.abs(diff)<0.005) return;
     const q=JSON.parse(JSON.stringify(p)); q.movimentos=q.movimentos||[]; const aj = (p.classe==='Outros'||(p.tipo==='caixinha'&&!p.reserva&&false));
     q.movimentos.push({id:uid('m'),data:todayISO(),tipo:aj?'ajuste':'rendimento',valor:diff,obs:'Atualização de saldo'}); save('potes',id,q); toast(p.nome+': '+fmt(n)); return; }
