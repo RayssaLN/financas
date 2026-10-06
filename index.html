@@ -894,7 +894,7 @@ function cartaoNaCat(o,catK){
   const add=(nome,e)=>{ const k=semAcento(nome); (por[k]=por[k]||{nome,itens:[]}).itens.push(e); };
   (S.cartao[mk]?.compras||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK).sort((a,b)=>a.data.localeCompare(b.data))
     .forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao}${x.parcela?' · '+x.parcela.toLowerCase():''} · ${x.data.slice(8,10)}/${x.data.slice(5,7)}${x.guardado?' · guardado':''}`}));
-  (S.cinfo.contas||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK&&(!x.desde||mk>=addMonth(x.desde,-1)))
+  (S.cinfo.contas||[]).filter(x=>x.cat&&x.cat.split('|')[0]===catK&&(!x.desde||mk>=addMonth(x.desde,-1))&&!(S.cartao[mk]?.compras||[]).some(y=>!y.parcela&&y.cartao===x.cartao&&semAcento(y.desc)===semAcento(x.desc)))
     .forEach(x=>add(x.desc,{desc:x.desc,card:x.cartao,valor:+x.valor||0,info:`${x.cartao==='MP'?'Mercado Pago':x.cartao} · todo mês${contaGuardada(x)?' · dinheiro guardado':''}`}));
   return por;
 }
@@ -996,7 +996,7 @@ function composicaoFatura(card,F){
   F=F||thisMonth(); const it=[];
   const fora=((S.cinfo.fora||{})[F])||[];
   (S.cinfo.parcelas||[]).filter(p=>p.cartao===card).forEach(p=>{ const pm=parcMeses(p), n=p.valores.length; const jb=parcBase(p).juntas; let veio=jb[addMonth(F,-1)]===0; pm.forEach((m,i)=>{ if(m===F){ it.push({t:'Parcela',d:`${p.desc} ${i+1}/${n}`,v:p.valores[i],pid:p.id,veio}); veio=false; } }); });
-  (S.cinfo.contas||[]).filter(c=>c.cartao===card&&!c.parcelaId&&(!c.desde||F>=c.desde)).forEach(c=>it.push({t:'Conta',d:c.desc,v:fora.includes(c.id)?0:(+c.valor||0),cid:c.id,fora:fora.includes(c.id)}));
+  (S.cinfo.contas||[]).filter(c=>c.cartao===card&&!c.parcelaId&&(!c.desde||F>=c.desde)&&!compraDaConta(c,F)).forEach(c=>it.push({t:'Conta',d:c.desc,v:fora.includes(c.id)?0:(+c.valor||0),cid:c.id,fora:fora.includes(c.id)}));
   [addMonth(F,-3),addMonth(F,-2),addMonth(F,-1),F].forEach(mk=>(S.cartao[mk]?.compras||[]).filter(c=>c.cartao===card&&!c.parcela&&(c.fatura||faturaMes(card,c.data))===F).forEach(c=>it.push({t:'Compra',d:c.desc+' · '+c.data.slice(8,10)+'/'+c.data.slice(5,7),v:+c.valor||0,compra:c.id,mk,movida:!!c.fatura&&c.fatura!==faturaMes(card,c.data)})));
   (S.cinfo.creditos||[]).filter(c=>c.cartao===card&&c.mes===F).forEach(c=>it.push({t:'Estorno',d:c.desc,v:-(+c.valor||0),id:c.id}));
   return {it,tot:r2(sum(it,x=>x.v))};
@@ -1742,7 +1742,13 @@ function tirarDaCaixinha(compra){
   if(i<0) return; ms.splice(i,1); save('potes',pid,q);
 }
 function cicloConta(c){ return faturaMes(c.cartao, todayISO()); }
-function contaGuardadaNoCiclo(c){ return ((S.cinfo.guardados||{})[cicloConta(c)]||{})[c.id]; }
+function compraDaConta(c,F){
+  // compra lançada no cartão com o mesmo nome da conta recorrente, na mesma fatura: é a própria conta daquele mês
+  const n=semAcento(c.desc); let achou=null;
+  [addMonth(F,-2),addMonth(F,-1),F].forEach(mk=>(S.cartao[mk]?.compras||[]).forEach(x=>{ if(!achou&&!x.parcela&&x.cartao===c.cartao&&semAcento(x.desc)===n&&(x.fatura||faturaMes(x.cartao,x.data))===F) achou=x; }));
+  return achou;
+}
+function contaGuardadaNoCiclo(c){ const ci=cicloConta(c); const g=((S.cinfo.guardados||{})[ci]||{})[c.id]; if(g) return g; const x=compraDaConta(c,ci); return x&&x.guardado?{compra:x.id}:null; }
 function marcarGuardado(lista){
   if(readonlyView()) return save();
   const g=JSON.parse(JSON.stringify(S.cinfo.guardados||{}));
