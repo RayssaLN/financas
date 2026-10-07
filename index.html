@@ -516,6 +516,7 @@ try{ applyPal(localStorage.getItem('fin.pal')||'ameixa'); }catch(e){ applyPal('a
 
 /* ================= constants ================= */
 const I = {
+  casa:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
   emprest:'<path d="M3 12h4l3 3h4a2 2 0 0 0 0-4h-3"/><path d="M7 12V8a2 2 0 0 1 2-2h3"/><circle cx="17" cy="6" r="3"/><path d="M3 19h12l6-4"/>',
   home:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
   gastos:'<path d="M4 6h16M4 12h16M4 18h10"/>',
@@ -544,6 +545,7 @@ const VIEWS = [
   {g:'Investir', id:'investimentos', n:'Investimentos', i:'invest'},
   {g:'Investir', id:'rendimentos', n:'Rendimentos totais', short:'Rendimentos', i:'rend'},
   {g:'Investir', id:'carteira', n:'Análise da carteira', short:'Carteira', i:'carteira'},
+  {g:'Investir', id:'patrimonio', n:'Patrimônio', i:'casa'},
 ];
 const BNAV_ALL = ['inicio','gastos','cartao','caixinhas'];
 const VIEWS_ALL = VIEWS;
@@ -1493,6 +1495,88 @@ function emprDesfazer(id){
   if(p.gasto) tirarDoGasto(p.gasto); if(p.receb) tirarRecebido(p.receb);
   if(p.mes&&p.avulso) tirarDoGasto({mes:p.mes,item:p.item,avulso:p.avulso,valor:p.valor}); // pagamentos da versão anterior
   salvarEmpr(L); toast(emprTipo(e)==='emprestei'?'Recebimento desfeito':'Pagamento desfeito');
+}
+
+/* ================= patrimônio: imóveis, veículos (FIPE) e outros bens ================= */
+const FIPE='https://parallelum.com.br/fipe/api/v1';
+const BEM_TIPO={imovel:['Imóvel','🏠'],veiculo:['Veículo','🚗'],outro:['Outro bem','📦']};
+const bensList=()=>S.config.patrimonio||[];
+function salvarBens(l){ S.config={...S.config,patrimonio:l}; save('config','geral',S.config); }
+const fipeCache={};
+async function fipeGet(path){ if(fipeCache[path]) return fipeCache[path]; const r=await fetch(FIPE+path); if(!r.ok) throw new Error('FIPE '+r.status); const j=await r.json(); fipeCache[path]=j; return j; }
+let fipeAtualizando=false;
+async function atualizarFipes(forcar){
+  if(fipeAtualizando||readonlyView()) return; const L=bensList(); const hoje=todayISO();
+  const vencidos=L.filter(b=>b.tipo==='veiculo'&&b.fipe&&b.fipe.ano&&(forcar||!b.fipe.em||addMonth(b.fipe.em.slice(0,7),1)<=hoje.slice(0,7)));
+  if(!vencidos.length) return; fipeAtualizando=true; let mud=0;
+  const nl=JSON.parse(JSON.stringify(L));
+  for(const b of vencidos){ try{ const f=b.fipe; const j=await fipeGet(`/${f.cat}/marcas/${f.marca}/modelos/${f.modelo}/anos/${f.ano}`); const v=numBR(j.Valor); const x=nl.find(y=>y.id===b.id);
+      if(x&&isFinite(v)&&v>0){ (x.hist=x.hist||[]).push({data:hoje,valor:v}); x.valor=v; x.fipe={...x.fipe,em:hoje,ref:j.MesReferencia,codigo:j.CodigoFipe}; mud++; } }catch(e){} }
+  fipeAtualizando=false; if(mud){ salvarBens(nl); if(forcar) toast(mud+(mud===1?' veículo atualizado':' veículos atualizados')+' pela FIPE'); } else if(forcar) toast('Não consegui falar com a FIPE agora. Tente mais tarde.');
+}
+function vPatrimonio(){
+  setTimeout(()=>atualizarFipes(false),50);
+  const L=bensList(), ro=readonlyView();
+  const tBens=sum(L,b=>+b.valor||0), tDiv=sum(L,b=>+b.divida||0);
+  const pr=resumoPessoa(S.potes); const fin=pr?r2(pr.reserva+pr.caixinhas+pr.invTot):0;
+  let h=head('Investir','Patrimônio','Tudo o que você tem: imóveis, veículos e outros bens, mais o dinheiro guardado', ro?'':`<div class="actions"><button class="btn" data-act="novo-bem" data-tipo="veiculo">🚗 Veículo</button><button class="btn" data-act="novo-bem" data-tipo="imovel">🏠 Imóvel</button><button class="btn pri" data-act="novo-bem" data-tipo="outro">${svg('plus')}Outro bem</button></div>`);
+  h+=`<div class="grid g4"><div class="card stat hero"><div class="lbl">Patrimônio líquido</div><div class="val">${fmt(tBens-tDiv+fin)}</div><div class="ft">Bens + dinheiro guardado − dívidas</div></div>
+    <div class="card stat"><div class="lbl">Bens</div><div class="val sm">${fmt(tBens)}</div><div class="ft">${L.length} ${L.length===1?'item':'itens'}</div></div>
+    <div class="card stat"><div class="lbl">Dinheiro guardado</div><div class="val sm">${fmt(fin)}</div><div class="ft">Reserva, caixinhas e investimentos</div></div>
+    <div class="card stat"><div class="lbl">Ainda devo</div><div class="val sm ${tDiv?'neg':''}">${fmt(tDiv)}</div><div class="ft">Financiamentos dos bens</div></div></div>`;
+  if(!L.length) return h+`<div class="card empty section"><h3>Nenhum bem cadastrado</h3><p>Cadastre sua casa, seu carro ou qualquer outro bem. Para veículos, o valor vem da <b>tabela FIPE</b> e se atualiza sozinho todo mês.</p></div>`;
+  h+=`<div class="card section"><div class="card-h"><div><h2>Seus bens</h2><p>Valor de hoje de cada um</p></div>${ro||!L.some(b=>b.fipe)?'':`<button class="btn sm ghost" data-fipe-atualizar>Atualizar FIPE agora</button>`}</div><div class="rows">${[...L].sort((a,b)=>(b.valor||0)-(a.valor||0)).map(b=>{ const t=BEM_TIPO[b.tipo]||BEM_TIPO.outro; const hs=b.hist||[]; const ant=hs.length>1?hs[hs.length-2].valor:null; const dv=ant!=null?r2(b.valor-ant):null;
+    return `<div class="row"><span class="emo" style="font-size:1.4rem;width:34px;text-align:center">${t[1]}</span><div class="grow"><div class="t">${esc(b.nome)}${b.placa?` <span class="pill" style="font-family:monospace;letter-spacing:.06em">${esc(b.placa)}</span>`:''}</div>
+      <div class="s">${b.fipe?`FIPE ${esc(b.fipe.ref||'')} · ${esc(b.fipe.label||'')}`:(b.data?'Avaliado em '+b.data.split('-').reverse().join('/'):t[0])}${+b.divida?` · <span class="neg">devo ${fmt(b.divida)}</span>`:''}${b.obs?' · '+esc(b.obs):''}</div></div>
+      <div style="text-align:right"><div class="v">${fmt(b.valor)}</div>${dv?`<div style="font-size:.74rem" class="${dv<0?'neg':'pos'}">${dv<0?'▼':'▲'} ${fmt(Math.abs(dv))} no mês</div>`:''}</div>
+      ${b.placa?`<a class="btn sm ghost" href="https://placafipe.com/placa/${encodeURIComponent(b.placa)}" target="_blank" rel="noopener">Placa</a>`:''}${ro?'':`<button class="btn sm ghost" data-act="editar-bem" data-id="${b.id}">Editar</button>`}</div>`; }).join('')}</div></div>`;
+  h+=`<p class="note">Os veículos usam a tabela FIPE, que muda todo mês. O app busca o valor novo sozinho quando você abre esta tela. Imóveis e outros bens ficam com o valor que você informar.</p>`;
+  return h;
+}
+function bemForm(id,tipoNovo){
+  const b=id?bensList().find(x=>x.id===id):{tipo:tipoNovo||'outro',nome:'',valor:'',divida:'',obs:'',data:todayISO()};
+  const ehV=b.tipo==='veiculo', f=b.fipe||{cat:'carros'};
+  const money=v=>v?r2(v).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  const fipeHtml=ehV?`<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin:4px 0 12px">
+      <div style="font-weight:600;font-size:.88rem;margin-bottom:6px">Tabela FIPE</div>
+      <p class="note" style="margin:0 0 8px">Digite a placa e toque em "Ver modelo pela placa" para descobrir o modelo e o ano exatos. Depois escolha abaixo e o valor da FIPE entra sozinho.</p>
+      <div class="frow"><div class="field"><label for="fp-cat">Tipo</label><select id="fp-cat" name="fcat"><option value="carros">Carro</option><option value="motos">Moto</option><option value="caminhoes">Caminhão</option></select></div>
+        <div class="field"><label for="fp-marca">Marca</label><select id="fp-marca" name="fmarca"><option value="">Carregando…</option></select></div></div>
+      <div class="field"><label for="fp-modelo">Modelo</label><select id="fp-modelo" name="fmodelo"><option value="">Escolha a marca</option></select></div>
+      <div class="field"><label for="fp-ano">Ano / combustível</label><select id="fp-ano" name="fano"><option value="">Escolha o modelo</option></select></div>
+      <input type="hidden" name="flabel" id="fp-label"><input type="hidden" name="fref" id="fp-ref"><input type="hidden" name="fcod" id="fp-cod">
+      <div id="fp-res" class="muted" style="font-size:.84rem"></div></div>`:'';
+  form({title:(id?'Editar ':'Novo ')+(BEM_TIPO[b.tipo]||BEM_TIPO.outro)[0].toLowerCase(), fields:[
+    {name:'nome',label:ehV?'Nome (ex.: Onix do Kelvyn)':b.tipo==='imovel'?'Nome (ex.: Casa, Apartamento)':'Nome',req:true,value:b.nome},
+    ...(ehV?[{name:'placa',label:'Placa (opcional)',value:b.placa||''}]:[]),
+    {type:'row',items:[{name:'valor',label:ehV?'Valor (vem da FIPE)':'Quanto vale hoje',type:'money',value:money(b.valor)},...(ehV?[]:[{name:'data',label:'Data da avaliação',type:'date',value:b.data||todayISO()}])]},
+    {name:'divida',label:'Ainda devo (financiamento), opcional',type:'money',value:money(b.divida)},
+    {name:'obs',label:'Observação (opcional)',value:b.obs||''},
+  ], extra:(ehV?`<button type="button" class="btn sm" id="fp-placa" style="margin:-4px 0 10px">🔎 Ver modelo pela placa</button>`:'')+fipeHtml+(id?`<div class="confirm" id="delzone"><span style="flex:1">Apagar ${esc(b.nome)}?</span><button type="button" class="btn sm danger" data-bem-del="${id}">Apagar</button></div>`:''),
+  onSubmit:v=>{ const valor=r2(parseNum(v.valor)); if(!valor) return ehV?'Escolha o veículo na FIPE ou digite o valor':'Informe quanto vale';
+    const q={...b,id:id||uid('bem'),nome:v.nome.trim(),valor,divida:r2(parseNum(v.divida))||0,obs:v.obs.trim()};
+    if(!ehV) q.data=v.data; else { q.placa=(v.placa||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+      if(v.fano){ q.fipe={cat:v.fcat,marca:v.fmarca,modelo:v.fmodelo,ano:v.fano,label:v.flabel,ref:v.fref,codigo:v.fcod,em:todayISO()}; } }
+    const hs=q.hist||[]; if(!hs.length||hs[hs.length-1].valor!==valor) q.hist=[...hs,{data:todayISO(),valor}];
+    salvarBens([...bensList().filter(x=>x.id!==q.id),q]); toast(id?'Salvo':q.nome+' adicionado ao patrimônio'); }});
+  if(!ehV) return;
+  const $=i=>document.getElementById(i), opt=(l,sel)=>l.map(o=>`<option value="${esc(o.codigo)}" ${String(o.codigo)===String(sel)?'selected':''}>${esc(o.nome)}</option>`).join('');
+  const res=$('fp-res'), cat=$('fp-cat'), ma=$('fp-marca'), mo=$('fp-modelo'), an=$('fp-ano');
+  cat.value=f.cat||'carros';
+  const erro=()=>{ res.innerHTML='<span class="neg">Não consegui carregar a FIPE agora. Você pode digitar o valor à mão.</span>'; };
+  const carregarMarcas=async sel=>{ ma.innerHTML='<option value="">Carregando…</option>'; mo.innerHTML='<option value="">Escolha a marca</option>'; an.innerHTML='<option value="">Escolha o modelo</option>';
+    try{ const l=await fipeGet(`/${cat.value}/marcas`); ma.innerHTML='<option value="">Escolha</option>'+opt(l,sel); if(sel) await carregarModelos(f.modelo); }catch(e){ erro(); } };
+  const carregarModelos=async sel=>{ if(!ma.value) return; mo.innerHTML='<option value="">Carregando…</option>'; an.innerHTML='<option value="">Escolha o modelo</option>';
+    try{ const j=await fipeGet(`/${cat.value}/marcas/${ma.value}/modelos`); mo.innerHTML='<option value="">Escolha</option>'+opt(j.modelos||[],sel); if(sel) await carregarAnos(f.ano); }catch(e){ erro(); } };
+  const carregarAnos=async sel=>{ if(!mo.value) return; an.innerHTML='<option value="">Carregando…</option>';
+    try{ const l=await fipeGet(`/${cat.value}/marcas/${ma.value}/modelos/${mo.value}/anos`); an.innerHTML='<option value="">Escolha</option>'+opt(l,sel); if(sel) await buscarValor(); }catch(e){ erro(); } };
+  const buscarValor=async()=>{ if(!an.value) return; res.textContent='Buscando valor…';
+    try{ const j=await fipeGet(`/${cat.value}/marcas/${ma.value}/modelos/${mo.value}/anos/${an.value}`); const v=numBR(j.Valor);
+      $('f-valor').value=r2(v).toLocaleString('pt-BR',{minimumFractionDigits:2}); $('fp-label').value=`${j.Marca} ${j.Modelo} ${j.AnoModelo===32000?'0 km':j.AnoModelo} ${j.Combustivel}`; $('fp-ref').value=j.MesReferencia; $('fp-cod').value=j.CodigoFipe;
+      res.innerHTML=`<b>${fmt(v)}</b> · FIPE ${esc(j.MesReferencia)} · código ${esc(j.CodigoFipe)}`; }catch(e){ erro(); } };
+  cat.addEventListener('change',()=>carregarMarcas()); ma.addEventListener('change',()=>carregarModelos()); mo.addEventListener('change',()=>carregarAnos()); an.addEventListener('change',buscarValor);
+  $('fp-placa').addEventListener('click',()=>{ const pl=($('f-placa').value||'').toUpperCase().replace(/[^A-Z0-9]/g,''); if(pl.length<7){ toast('Digite a placa completa'); return; } window.open('https://placafipe.com/placa/'+pl,'_blank','noopener'); });
+  carregarMarcas(f.marca);
 }
 function vMeliuz(){
   const L=[...(S.meliuz.lancamentos||[])].sort((a,b)=>b.data.localeCompare(a.data));
@@ -2634,6 +2718,8 @@ Object.assign(ACT,{
   'novo-avulso'(){ gastoRapido(); },
   'conta-recorrente'(){ gastoRapido({recorrente:true}); },
   'fab'(){ if(UI.view==='cartao') ACT['nova-compra'](); else gastoRapido(); },
+  'novo-bem'(d){ bemForm(null,d&&d.tipo); },
+  'editar-bem'(d){ bemForm(d.id); },
   'novo-empr'(d){ emprForm(null,d&&d.tipo); },
   'empr-outro'(d){ const e=emprList().find(x=>x.id===d.id); if(!e) return; const ehE=emprTipo(e)==='emprestei';
     form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true}],
@@ -2698,6 +2784,8 @@ document.addEventListener('click', e=>{
     if(r&&r.gasto) tirarDoGasto(r.gasto);
     let parcs=S.cinfo.parcelas||[]; if(r&&r.parcAntes) parcs=parcs.map(pp=>pp.id in r.parcAntes?{...pp,pagas:r.parcAntes[pp.id]}:pp);
     if(pg[F]) delete pg[F][card]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Pagamento desfeito'); return; }
+  if(t.closest('[data-fipe-atualizar]')){ atualizarFipes(true); return; }
+  const bd=t.closest('[data-bem-del]'); if(bd){ salvarBens(bensList().filter(x=>x.id!==bd.dataset.bemDel)); closeModal(); toast('Bem apagado'); return; }
   const eab=t.closest('[data-empr-aba]'); if(eab){ UI.emprAba=eab.dataset.emprAba; render(); return; }
   const ep1=t.closest('[data-empr-pagar]'); if(ep1){ if(readonlyView()) return save(); emprPagar(ep1.dataset.emprPagar); return; }
   const ep2=t.closest('[data-empr-desf]'); if(ep2){ if(readonlyView()) return save(); emprDesfazer(ep2.dataset.emprDesf); return; }
@@ -2773,7 +2861,7 @@ function render(){
   pickMonth();
   // keep focus on inline inputs across re-render
   const ae=document.activeElement; const key = ae && ae.id ? '#'+ae.id : (ae && ae.dataset && ae.dataset.item ? `[data-item="${ae.dataset.item}"][data-f="${ae.dataset.f}"]` : null);
-  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz,emprestimos:vEmprestimos,casal:vCasal,'casal-cx':vCasalCx,'casal-role':vRole};
+  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz,emprestimos:vEmprestimos,patrimonio:vPatrimonio,casal:vCasal,'casal-cx':vCasalCx,'casal-role':vRole};
   if(UI.perfil==='casal' && !UI.view.startsWith('casal')) UI.view='casal';
   if(UI.perfil!=='casal' && UI.view.startsWith('casal')) UI.view='inicio';
   const _cn = UI.perfil!=='casal' ? nomeView(UI.view) : null;
