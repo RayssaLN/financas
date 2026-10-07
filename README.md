@@ -1,6 +1,6 @@
 # 💜 Finanças
 
-App web de finanças pessoais e de casal, criado para substituir as minhas planilhas de controle financeiro e deixar tudo em um só lugar.
+App web de finanças pessoais e de casal, criado para substituir planilhas de controle financeiro e deixar tudo em um só lugar.
 
 🔗 **Acesse:** https://rayssaln.github.io/financas/
 
@@ -44,4 +44,4 @@ Nenhum dado financeiro fica neste repositório.
 
 ---
 
-Feito por **Rayssa** 💜
+Feito por **Rayssa e Kelvin** 💜
