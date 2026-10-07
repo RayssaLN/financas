@@ -1403,10 +1403,13 @@ function vCarteira(){
         <div id="sim-res">${simHtml()}</div>
       </div>
     </div></div>`;
-  const ps = all.filter(p=>carteiraGrupo(p)).sort((a,b)=>{ const o=CART_CLASSES.concat('Outros'); return o.indexOf(carteiraGrupo(a))-o.indexOf(carteiraGrupo(b)) || potSaldo(b)-potSaldo(a); });
+  const cxs = all.filter(p=>p.tipo==='caixinha'&&!p.reserva);
+  const cxAgr = cxs.length ? {id:'_cx', nome:'Caixinhas', cor:'#6b5bd3', _agr:true, _sd:sum(cxs,potSaldo), _n:cxs.length, _g:'Outros'} : null;
+  const ps = [...all.filter(p=>carteiraGrupo(p)&&!(p.tipo==='caixinha'&&!p.reserva)), ...(cxAgr?[cxAgr]:[])].sort((a,b)=>{ const o=CART_CLASSES.concat('Outros'); const gg=x=>x._agr?x._g:carteiraGrupo(x), sv=x=>x._agr?x._sd:potSaldo(x); return o.indexOf(gg(a))-o.indexOf(gg(b)) || sv(b)-sv(a); });
   let lastG=null;
   h += `<div class="card section"><div class="card-h"><div><h2>Cada aplicação</h2><p>Clique no valor para atualizar o saldo. O app guarda a diferença no histórico.</p></div><button class="btn sm pri" data-act="novo-pote" data-tipo="investimento">${svg('plus')}Nova aplicação</button></div>
-    <div class="rows">${ps.map(p=>{const sd=potSaldo(p), gr=carteiraGrupo(p); let hd=''; if(gr!==lastG){ lastG=gr; hd=`<div style="padding:14px 0 4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;display:flex;justify-content:space-between"><span>${gr==='Renda fixa'?'Renda Fixa':gr}</span><span class="num">${fmt(g[gr])}</span></div>`; }
+    <div class="rows">${ps.map(p=>{const sd=p._agr?p._sd:potSaldo(p), gr=p._agr?p._g:carteiraGrupo(p); let hd=''; if(gr!==lastG){ lastG=gr; hd=`<div style="padding:14px 0 4px;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;display:flex;justify-content:space-between"><span>${gr==='Renda fixa'?'Renda Fixa':gr}</span><span class="num">${fmt(g[gr])}</span></div>`; }
+      if(p._agr) return hd+`<div class="row"><i class="dot" style="background:${p.cor}"></i><div class="grow"><div class="t">Caixinhas <span class="muted" style="font-weight:500;font-size:.78rem">· ${p._n} ${p._n===1?'caixinha':'caixinhas'} somadas (sem a reserva)</span></div><div class="bar" style="margin-top:6px;height:6px"><i style="width:${geral?Math.max(0,sd/geral*100):0}%;background:${p.cor}"></i></div></div><span class="muted num" style="font-size:.82rem">${pct(geral?sd/geral:0)}</span><span class="num" style="font-weight:700;min-width:110px;text-align:right;padding:0 10px">${fmt(sd)}</span><button class="btn sm ghost" data-go="caixinhas">Ver</button></div>`;
       return hd+`<div class="row"><i class="dot" style="background:${esc(p.cor)}"></i><div class="grow"><div class="t">${esc(p.nome)}${p.instituicao?` <span class="muted" style="font-weight:500;font-size:.78rem">· ${esc(p.instituicao)}</span>`:''}</div><div class="bar" style="margin-top:6px;height:6px"><i style="width:${geral?Math.max(0,sd/geral*100):0}%;background:${esc(p.cor)}"></i></div></div><span class="muted num" style="font-size:.82rem">${pct(geral?sd/geral:0)}</span><input class="cell-input" style="font-weight:700;border-color:var(--line-2);min-width:110px" inputmode="decimal" aria-label="Saldo de ${esc(p.nome)}" id="saldo-${p.id}" data-saldo-pote="${p.id}" value="${r2(sd).toLocaleString('pt-BR',{minimumFractionDigits:2})}"><button class="btn sm ghost" data-act="editar-pote" data-pote="${p.id}">Editar</button></div>`;}).join('')}</div>
     <p class="note">Aplicações da classe "Outros" (como a conta da corretora) ficam em Outros; as demais entram na carteira pela classe que você escolher em Editar.</p></div>`;
   return h;
@@ -1836,7 +1839,7 @@ const ACT = {
   'sim-registrar'(){
     const r=simular(+UI.sim||0); const feitos=[], faltam=[];
     CART_CLASSES.forEach(k=>{ const v=r.out[k]; if(!(v>0)) return;
-      const ps=potesList().filter(p=>carteiraGrupo(p)===k).sort((a,b)=>potSaldo(b)-potSaldo(a)); const p=ps[0];
+      const ps=potesList().filter(p=>carteiraGrupo(p)===k&&!(p.tipo==='caixinha'&&!p.reserva)).sort((a,b)=>potSaldo(b)-potSaldo(a)); const p=ps[0];
       if(!p){ faltam.push(k); return; }
       const q=JSON.parse(JSON.stringify(S.potes[p.id])); q.movimentos=q.movimentos||[]; q.movimentos.push({id:uid('m'),data:todayISO(),tipo:'aporte',valor:v,obs:'Aporte distribuído pelo simulador'}); save('potes',p.id,q); feitos.push(p.nome);
     });
