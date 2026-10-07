@@ -163,7 +163,9 @@ button{cursor:pointer}
 
 /* ---------- shell ---------- */
 .app{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
-.side{position:sticky;top:0;height:100vh;padding:24px 14px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:22px;background:var(--bg)}
+.side{position:sticky;top:0;height:100vh;height:100dvh;padding:24px 14px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:22px;background:var(--bg);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.side>*{flex-shrink:0}
+.side::-webkit-scrollbar{width:8px}.side::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
 .brand{display:flex;align-items:center;gap:10px;padding:0 8px}
 .brand svg{width:36px;height:36px;flex:none}
 .brand .spark{transform-origin:33px 8.1px;animation:spark 3.2s ease-in-out infinite}
@@ -1432,17 +1434,17 @@ function vEmprestimos(){
   h+=`<div class="seg" style="max-width:520px;margin:-4px 0 14px">${[['peguei','Peguei emprestado',nP],['emprestei','Emprestei',nE]].map(([k,t,n])=>`<button type="button" data-empr-aba="${k}" aria-pressed="${aba===k}">${t} <span class="muted" style="font-weight:500">${n}</span></button>`).join('')}</div>`;
   const ativos=L.filter(e=>emprPago(e)<e.valores.length), fim=L.filter(e=>emprPago(e)>=e.valores.length);
   const falta=sum(ativos,e=>sum(e.valores.slice(emprPago(e))));
-  const doMes=ativos.filter(e=>addMonth(e.inicio,emprPago(e))<=thisMonth());
+  const doMes=ativos.filter(e=>e.inicio&&addMonth(e.inicio,emprPago(e))<=thisMonth());
   h+=`<div class="grid g3"><div class="card stat hero"><div class="lbl">${ehE?'Falta receber':'Falta pagar'}</div><div class="val">${fmt(falta)}</div><div class="ft">${ativos.length} ${ativos.length===1?'empréstimo':'empréstimos'}</div></div>
     <div class="card stat"><div class="lbl">${ehE?'Para receber':'Para pagar'} em ${mShort(thisMonth())}</div><div class="val sm">${fmt(sum(doMes,e=>e.valores[emprPago(e)]))}</div><div class="ft">${doMes.length?doMes.map(e=>esc(e.quem||e.desc)).join(', '):'Nada este mês'}</div></div>
     <div class="card stat"><div class="lbl">${ehE?'Já recebido':'Já pago'}</div><div class="val sm">${fmt(sum(L,e=>sum(e.pagamentos||[],p=>p.valor)))}</div><div class="ft">Somando todos</div></div></div>`;
-  const card=e=>{ const n=e.valores.length, pg=emprPago(e), tot=sum(e.valores), rest=r2(sum(e.valores.slice(pg))), prox=pg<n?addMonth(e.inicio,pg):null, atras=prox&&prox<thisMonth(), cor=ehE?'var(--good, #2e7d5b)':'var(--accent)';
+  const card=e=>{ const n=e.valores.length, pg=emprPago(e), tot=sum(e.valores), rest=r2(sum(e.valores.slice(pg))), prox=pg<n?(e.inicio?addMonth(e.inicio,pg):'sem'):null, atras=prox&&prox!=='sem'&&prox<thisMonth(), cor=ehE?'var(--good, #2e7d5b)':'var(--accent)';
     return `<div class="card" style="border-left:4px solid ${cor};padding:14px 16px">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="min-width:0"><div style="font-weight:700">${esc(e.desc)}${e.quem&&!semAcento(e.desc).includes(semAcento(e.quem))?` <span class="muted" style="font-weight:500">· ${ehE?'para':'com'} ${esc(e.quem)}</span>`:''}</div>
         <div class="muted" style="font-size:.8rem;margin-top:2px">${n===1?`valor ${fmt(tot)}`:(e.valores.every(v=>v===e.valores[0])?`${n}x de ${fmt(e.valores[0])}`:e.valores.slice(1).every(v=>v===e.valores[1])?`1ª de ${fmt(e.valores[0])} + ${n-1}x de ${fmt(e.valores[1])}`:`${n} parcelas`)+` · total ${fmt(tot)}`}${e.dia?` · todo dia ${e.dia}`:''}</div>${e.obs?`<div style="font-size:.8rem;margin-top:4px;color:var(--gold)">${esc(e.obs)}</div>`:''}</div>
         <div style="text-align:right"><div class="muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600">${rest?(ehE?'Falta receber':'Falta'):(ehE?'Recebido':'Quitado')}</div><div style="font-family:var(--display);font-weight:700;font-size:1.2rem" class="num">${fmt(rest)}</div></div></div>
-      ${n>1?`<div style="display:flex;gap:3px;margin:12px 0 10px">${e.valores.map((v,i)=>`<i title="Parcela ${i+1} · ${esc(mShort(addMonth(e.inicio,i)))}: ${esc(fmt(v))}" style="flex:1;height:8px;border-radius:3px;background:${i<pg?cor:'var(--surface-2)'}"></i>`).join('')}</div>`:'<div style="height:10px"></div>'}
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:.84rem">${n>1?`<b>${pg}</b> de ${n} ${ehE?'recebidas':'pagas'}`:(pg?(ehE?'Recebido':'Pago'):(ehE?'Ainda não recebeu':'Ainda não pagou'))}${prox?` · ${n>1?'próxima: ':''}<b>${fmt(e.valores[pg])}</b> em ${mShort(prox)}/${prox.slice(2,4)}${atras?' <span class="pill bad">atrasada</span>':''}`:''}</span>
+      ${n>1?`<div style="display:flex;gap:3px;margin:12px 0 10px">${e.valores.map((v,i)=>`<i title="Parcela ${i+1}${e.inicio?' · '+esc(mShort(addMonth(e.inicio,i))):''}: ${esc(fmt(v))}" style="flex:1;height:8px;border-radius:3px;background:${i<pg?cor:'var(--surface-2)'}"></i>`).join('')}</div>`:'<div style="height:10px"></div>'}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:.84rem">${n>1?`<b>${pg}</b> de ${n} ${ehE?'recebidas':'pagas'}`:(pg?(ehE?'Recebido':'Pago'):(ehE?'Ainda não recebeu':'Ainda não pagou'))}${prox?` · ${n>1?'próxima: ':''}<b>${fmt(e.valores[pg])}</b> ${prox==='sem'?'<span class="pill">sem data</span>':`em ${mShort(prox)}/${prox.slice(2,4)}`}${atras?' <span class="pill bad">atrasada</span>':''}`:''}</span>
         ${ro?'':`<span class="actions">${pg?`<button class="btn sm ghost" data-empr-desf="${e.id}">Desfazer</button>`:''}${prox?`<button class="btn sm pri" data-empr-pagar="${e.id}">${ehE?'Recebi':'Paguei'} ${fmt(e.valores[pg])}</button><button class="btn sm ghost" data-act="empr-outro" data-id="${e.id}">Outro valor</button>`:''}<button class="btn sm ghost" data-act="editar-empr" data-id="${e.id}">Editar</button></span>`}</div>
       ${(e.pagamentos||[]).length?`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:.8rem;color:var(--ink-2);font-weight:600">${ehE?'Recebimentos':'Pagamentos'} (${e.pagamentos.length})</summary><div class="rows">${e.pagamentos.map((p,i)=>`<div class="row" style="padding:5px 0;font-size:.84rem"><div class="grow">${n>1?'Parcela '+(i+1)+' · ':''}${p.data?p.data.split('-').reverse().join('/'):'antes do app'}</div><span class="v">${fmt(p.valor)}</span></div>`).join('')}</div></details>`:''}
     </div>`; };
@@ -1452,7 +1454,7 @@ function vEmprestimos(){
   return h;
 }
 function emprForm(id,tipoNovo){
-  const e=id?emprList().find(x=>x.id===id):{tipo:tipoNovo||'peguei',desc:'',quem:'',valores:[],inicio:thisMonth(),dia:'',obs:''};
+  const e=id?emprList().find(x=>x.id===id):{tipo:tipoNovo||'peguei',desc:'',quem:'',valores:[],inicio:tipoNovo==='emprestei'?'':thisMonth(),dia:'',obs:''};
   const ehE=emprTipo(e)==='emprestei';
   const n=e.valores.length||(ehE?1:''), tot=e.valores.length?r2(sum(e.valores)):'';
   const meses=Array.from({length:30},(_,i)=>addMonth(thisMonth(),i-12));
@@ -1460,7 +1462,7 @@ function emprForm(id,tipoNovo){
     {name:'quem',label:ehE?'Para quem':'Com quem',value:e.quem||'',req:true},
     {name:'desc',label:'Descrição (opcional)',value:id?e.desc:''},
     {type:'row',items:[{name:'total',label:ehE?'Valor emprestado':'Valor total a pagar',type:'money',req:true,value:tot?tot.toLocaleString('pt-BR',{minimumFractionDigits:2}):''},{name:'n',label:ehE?'Vai pagar em quantas vezes':'Nº de parcelas',value:n,req:true}]},
-    {type:'row',items:[{name:'inicio',label:ehE?'Mês que começa a pagar':'Mês da 1ª parcela',type:'select',options:meses.map(m=>[m,mLabel(m)]),value:e.inicio},{name:'dia',label:'Dia (opcional)',value:e.dia||''}]},
+    {type:'row',items:[{name:'inicio',label:ehE?'Quando vai te pagar':'Mês da 1ª parcela',type:'select',options:[...(ehE?[['','Sem data combinada']]:[]),...meses.map(m=>[m,mLabel(m)])],value:e.inicio},{name:'dia',label:'Dia (opcional)',value:e.dia||''}]},
     ...(id?[]:[
       {name:'mov',label:ehE?'O dinheiro saiu da minha conta agora (entra em Gastos gerais)':'O dinheiro entrou na minha conta agora (entra na Renda do mês)',type:'check',value:true},
       {name:'ja',label:ehE?'Quantas vezes a pessoa já pagou antes (não entra na Renda)':'Parcelas já pagas antes de usar o app (não entram em Gastos)',value:''}]),
@@ -1582,9 +1584,10 @@ function vMeliuz(){
   const L=[...(S.meliuz.lancamentos||[])].sort((a,b)=>b.data.localeCompare(a.data));
   const t=(k,y)=>sum(L.filter(x=>x.tipo===k&&(!y||x.data.startsWith(y))),x=>x.valor);
   const ganhoF=y=>t('cashback',y)+t('rendimento',y)+t('ajuste',y);
-  const ganho=ganhoF(), ass=t('assinatura'), res=ganho-ass, saldo=ganho-t('retirada');
+  const ganho=ganhoF(), ass=t('assinatura'), res=ganho-ass, saldo=ganho+t('inicial')-t('retirada');
   const cx=meliuzCx();
-  let h = head('Dia a dia','Méliuz','Cashback que entra, assinatura que sai: o Méliuz está valendo a pena?', `<button class="btn pri" data-act="novo-cashback">${svg('plus')}Lançar</button>`);
+  let h = head('Dia a dia','Méliuz','Cashback que entra, assinatura que sai: o Méliuz está valendo a pena?', readonlyView()?'':`<div class="actions">${(S.meliuz.lancamentos||[]).length?`<button class="btn ghost" data-act="mz-zerar">Começar do zero</button>`:''}<button class="btn pri" data-act="novo-cashback">${svg('plus')}Lançar</button></div>`);
+  if(S.meliuz.desde) h += `<p class="note" style="margin:-6px 0 12px">Contando desde ${S.meliuz.desde.split('-').reverse().join('/')}, quando você recomeçou.${S.meliuz.anterior?` <button class="linkbtn" data-act="mz-desfazer-zerar">Trazer de volta o histórico antigo</button>`:''}</p>`;
   if(!L.length) return h+`<div class="card empty"><h3>Nada lançado ainda</h3><p>Lance os cashbacks que caem, a assinatura que você paga e as retiradas para acompanhar se o Méliuz compensa.</p><button class="btn pri" data-act="novo-cashback">Lançar</button></div>`;
   const ok=res>=0, perto=Math.abs(res)<5;
   h += `<div class="grid g4">
@@ -1598,7 +1601,7 @@ function vMeliuz(){
   const anos=[...new Set(L.map(x=>x.data.slice(0,4)))].sort();
   h += `<div class="grid g21 section"><div class="card"><div class="card-h"><div><h2>Cashback x assinatura</h2><p>Últimos 12 meses</p></div></div>${barChart({labels:ms.map(mShort),series:ser})}${legend(ser)}</div>
     <div class="card"><div class="card-h"><div><h2>Por ano</h2></div></div><div class="tbl-wrap"><table><thead><tr><th>Ano</th><th class="r">Ganhou</th><th class="r">Pagou</th><th class="r">Resultado</th></tr></thead><tbody>${anos.map(y=>{const r=ganhoF(y)-t('assinatura',y); return `<tr><td><b>${y}</b></td><td class="r pos">${fmt(ganhoF(y))}</td><td class="r neg">${fmt(t('assinatura',y))}</td><td class="r"><span class="pill ${r>=0?'good':'bad'}">${r>=0?'+':''}${fmt(r)}</span></td></tr>`;}).join('')}</tbody></table></div></div></div>`;
-  const TP={cashback:['Cashback','good','+'],rendimento:['Rendimento','good','+'],ajuste:['Ajuste','','+'],assinatura:['Assinatura','bad','−'],retirada:['Retirada','warn','−']};
+  const TP={inicial:['Saldo inicial','','+'],cashback:['Cashback','good','+'],rendimento:['Rendimento','good','+'],ajuste:['Ajuste','','+'],assinatura:['Assinatura','bad','−'],retirada:['Retirada','warn','−']};
   const show=UI.mzAll?L:L.slice(0,15);
   h += `<div class="card section"><div class="card-h"><div><h2>Lançamentos</h2><p>${L.length} no total</p></div></div><div class="rows">${show.map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t"><span class="pill ${TP[x.tipo][1]}">${TP[x.tipo][0]}</span></div>${x.obs?`<div class="s">${esc(x.obs)}</div>`:''}</div><span class="v ${TP[x.tipo][1]==='good'?'pos':TP[x.tipo][1]==='bad'?'neg':''}">${TP[x.tipo][2]}${fmt(x.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-mz="${x.id}">${svg('trash')}</button></div>`).join('')}</div>${L.length>15&&!UI.mzAll?`<button class="btn sm ghost" data-mzall>Ver todos (${L.length})</button>`:''}</div>`;
   return h;
@@ -2718,6 +2721,19 @@ Object.assign(ACT,{
   'novo-avulso'(){ gastoRapido(); },
   'conta-recorrente'(){ gastoRapido({recorrente:true}); },
   'fab'(){ if(UI.view==='cartao') ACT['nova-compra'](); else gastoRapido(); },
+  'mz-zerar'(){ const cx=meliuzCx();
+    form({title:'Começar o Méliuz do zero', submit:'Zerar e começar', fields:[
+      {name:'saldo',label:'Saldo que ficou na conta do Méliuz hoje',type:'money',value:''},
+      ...(cx?[{name:'apagarcx',label:'Apagar também a caixinha "'+cx.nome+'" ('+fmt(potSaldo(cx))+')',type:'check',value:true}]:[])],
+      extra:`<p class="note" style="margin-top:-4px">Todos os lançamentos do Méliuz saem da tela e a conta de "Vale a pena?" começa de novo. O saldo que você informar entra só como saldo, sem contar como ganho. O histórico antigo fica guardado e dá para trazer de volta.</p>`,
+      onSubmit:v=>{ const sd=r2(parseNum(v.saldo)), hoje=todayISO();
+        const ant={desde:S.meliuz.desde||null,lancamentos:S.meliuz.lancamentos||[],itens:S.meliuz.itens||[]};
+        save('meliuz','registro',{...S.meliuz,itens:[],desde:hoje,anterior:ant,lancamentos:sd?[{id:uid('mz'),data:hoje,tipo:'inicial',valor:sd,obs:'Saldo que ficou no Méliuz'}]:[]});
+        if(v.apagarcx&&cx) remove('potes',cx.id);
+        toast('Méliuz zerado'+(sd?' · saldo de '+fmt(sd):'')+(v.apagarcx&&cx?' · caixinha apagada':'')); }}); },
+  'mz-desfazer-zerar'(){ const a=S.meliuz.anterior; if(!a) return; const novos=(S.meliuz.lancamentos||[]).filter(x=>x.tipo!=='inicial');
+    const m={...S.meliuz,lancamentos:[...a.lancamentos,...novos],itens:[...(a.itens||[]),...(S.meliuz.itens||[])]}; delete m.anterior; if(a.desde) m.desde=a.desde; else delete m.desde;
+    save('meliuz','registro',m); toast('Histórico antigo de volta'); },
   'novo-bem'(d){ bemForm(null,d&&d.tipo); },
   'editar-bem'(d){ bemForm(d.id); },
   'novo-empr'(d){ emprForm(null,d&&d.tipo); },
