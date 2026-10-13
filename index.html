@@ -766,7 +766,7 @@ function vInicio(){
   </div>`;
   h += `<div class="grid g4">
     <div class="card stat hero"><div class="lbl">Sobrou no mês</div><div class="val ${t.saldo>=0?'pos':'neg'}">${fmt(t.saldo)}</div><div class="ft">Entrou ${fmt(t.renda)} · saiu ${fmt(t.desp)}</div></div>
-    ${(()=>{ const prox=thisMonth(), inf=(S.cinfo.faturas||{})[prox]||{}; const cs=Object.keys(inf); const tot=cs.length?sum(cs,c=>inf[c]):fat; return `<div class="card stat"><div class="lbl">${cs.length?'Fatura de '+mShort(prox):'Compras no cartão'}</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length?cs.map(c=>(c==='MP'?'MP':c)+' '+fmt(inf[c])).join(' · '):(S.cartao[mk]?.compras||[]).length+' compras em '+mShort(mk)}</div></div>`; })()}
+    ${(()=>{ const F=mk, inf=(S.cinfo.faturas||{})[F]||{}; const cs=[...new Set([...cartoesFatura(),...Object.keys(inf)])].map(c=>({c,banco:inf[c]!=null,v:inf[c]!=null?+inf[c]:composicaoFatura(c,F).tot})).filter(x=>x.v>0.004); const tot=sum(cs,x=>x.v); const prev=cs.some(x=>!x.banco); return `<div class="card stat" style="cursor:pointer" data-go="cartao" data-fatmes="${F}" title="Ver a fatura no Cartão de crédito"><div class="lbl">Fatura de ${mShort(F)}${prev&&cs.length?' <span style="text-transform:none;letter-spacing:0;font-weight:500">· prevista</span>':''}</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length?cs.map(x=>(x.c==='MP'?'MP':esc(x.c))+' '+fmt(x.v)).join(' · '):'Nada no cartão'}</div></div>`; })()}
     <div class="card stat"><div class="lbl">Nas caixinhas</div><div class="val">${fmt(guardado)}</div><div class="ft">${cx.length} caixinhas</div></div>
     <div class="card stat"><div class="lbl">Investido</div><div class="val">${fmt(investido)}</div><div class="ft">Patrimônio total ${fmt(guardado+investido)}</div></div>
   </div>`;
@@ -2758,7 +2758,7 @@ document.addEventListener('click', e=>{
   const dro = t.closest('[data-del-role]'); if(dro){ saveFundo({...C.fundo,lancamentos:(C.fundo.lancamentos||[]).filter(l=>l.id!==dro.dataset.delRole)}); return; }
   if(t.closest('[data-roleall]')){ UI.roleAll=true; render(); return; }
   const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); const mvd=q.movimentos.find(m=>m.id===dmc.dataset.delMovCasal); if(mvd&&mvd.gasto&&mvd.quem===C.me) tirarDoGasto(mvd.gasto); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
-  const goB = t.closest('[data-go]'); if(goB){ go(goB.dataset.go); return; }
+  const goB = t.closest('[data-go]'); if(goB){ if(goB.dataset.fatmes){ UI.fatMes=goB.dataset.fatmes; UI.cTab='parcelas'; } go(goB.dataset.go); return; }
   if(t.closest('[data-more]')){ document.getElementById('more').classList.toggle('open'); return; }
   if(t.id==='more'){ t.classList.remove('open'); return; }
   if(t.closest('[data-close]') || t.matches('[data-scrim]')){ closeModal(); return; }
