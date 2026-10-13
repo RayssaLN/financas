@@ -1221,7 +1221,7 @@ function vCaixinhas(){
   const total=sum(cx,potSaldo), rend=sum(cx,potRend);
   const ms = mesesMov(cx,'aporte',8);
   h += `<div class="grid g3"><div class="card stat hero"><div class="lbl">Total nas caixinhas</div><div class="val">${fmt(total)}</div><div class="ft">${cx.length} caixinhas</div></div><div class="card stat"><div class="lbl">Rendeu até agora</div><div class="val sm pos">${fmt(rend)}</div><div class="ft">Soma dos rendimentos lançados</div></div><div class="card stat"><div class="lbl">Guardado em ${mShort(thisMonth())}</div><div class="val sm">${fmt(sumMonth(cx,'aporte',thisMonth()))}</div><div class="ft">Aportes do mês atual</div></div></div>`;
-  h += `<div class="pots section">${cx.map(potCard).join('')}<button class="pot new" data-act="novo-pote" data-tipo="caixinha">+ Nova caixinha</button></div>`;
+  h += `<div class="pots section">${[...cx].sort((a,b)=>potSaldo(a)-potSaldo(b)).map(potCard).join('')}<button class="pot new" data-act="novo-pote" data-tipo="caixinha">+ Nova caixinha</button></div>`;
   const ser = cx.map(p=>({name:p.nome,color:p.cor||'var(--accent)',values:ms.map(m=>sumMonth([p],'aporte',m))}));
   h += `<div class="card section"><div class="card-h"><div><h2>Quanto você guardou por mês</h2><p>Aportes em cada caixinha</p></div></div>${barChart({labels:ms.map(mShort),series:ser,stacked:true})}${legend(ser)}</div>`;
   h += `<p class="note">Ao criar uma caixinha, informe o saldo que ela já tem hoje. Depois, abra a caixinha e use "Atualizar saldo" sempre que quiser conferir com o banco: a diferença entra como rendimento.</p>`;
