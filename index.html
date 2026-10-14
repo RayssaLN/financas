@@ -518,6 +518,7 @@ try{ applyPal(localStorage.getItem('fin.pal')||'ameixa'); }catch(e){ applyPal('a
 
 /* ================= constants ================= */
 const I = {
+  estrela:'<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
   casa:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
   emprest:'<path d="M3 12h4l3 3h4a2 2 0 0 0 0-4h-3"/><path d="M7 12V8a2 2 0 0 1 2-2h3"/><circle cx="17" cy="6" r="3"/><path d="M3 19h12l6-4"/>',
   home:'<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
@@ -540,7 +541,7 @@ const VIEWS = [
   {g:'Dia a dia', id:'inicio', n:'Início', i:'home'},
   {g:'Dia a dia', id:'gastos', n:'Gastos do mês', short:'Gastos', i:'gastos'},
   {g:'Dia a dia', id:'cartao', n:'Cartão de crédito', short:'Cartão', i:'cartao'},
-  {g:'Dia a dia', id:'meliuz', n:'Méliuz', i:'meliuz'},
+  {g:'Dia a dia', id:'melimais', n:'Meli+', i:'estrela'},
   {g:'Dia a dia', id:'emprestimos', n:'Empréstimos', i:'emprest'},
   {g:'Guardar', id:'caixinhas', n:'Caixinhas', i:'cx'},
   {g:'Guardar', id:'reserva', n:'Reserva de emergência', short:'Reserva', i:'reserva'},
@@ -762,7 +763,7 @@ function vInicio(){
     <button class="qa" data-act="novo-gasto">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
     <button class="qa" data-act="nova-compra">${'<i>'+svg('cartao')+'</i>'}Compra no cartão</button>
     <button class="qa" data-act="novo-mov">${'<i>'+svg('cx')+'</i>'}Guardar dinheiro</button>
-    <button class="qa" data-act="novo-cashback">${'<i>'+svg('meliuz')+'</i>'}Cashback Méliuz</button>
+    <button class="qa" data-go="melimais">${'<i>'+svg('estrela')+'</i>'}Meli+</button>
   </div>`;
   h += `<div class="grid g4">
     <div class="card stat hero"><div class="lbl">Sobrou no mês</div><div class="val ${t.saldo>=0?'pos':'neg'}">${fmt(t.saldo)}</div><div class="ft">Entrou ${fmt(t.renda)} · saiu ${fmt(t.desp)}</div></div>
@@ -1583,13 +1584,44 @@ function bemForm(id,tipoNovo){
   $('fp-placa').addEventListener('click',()=>{ const pl=($('f-placa').value||'').toUpperCase().replace(/[^A-Z0-9]/g,''); if(pl.length<7){ toast('Digite a placa completa'); return; } window.open('https://placafipe.com/placa/'+pl,'_blank','noopener'); });
   carregarMarcas(f.marca);
 }
+
+/* ================= Meli+ (caixinha do Mercado Pago com assinatura) ================= */
+function reabrirPote(id){ if(UI.view==='melimais') return; setTimeout(()=>openPote(id),30); }
+function meliMaisCx(){ const ps=potesList(); return ps.find(p=>p.id===S.config.meliMaisId) || ps.find(p=>/^meli ?\+|meli ?mais/i.test(semAcento(p.nome))) || ps.find(p=>+p.mensalidade>0); }
+function vMeliMais(){
+  const p=meliMaisCx(), ro=readonlyView();
+  let h=head('Dia a dia','Meli+','Sua caixinha do Mercado Pago com a assinatura Meli+: quanto tem, quanto rendeu e se vale a pena');
+  if(!p){ const cxs=potesList('caixinha');
+    return h+`<div class="card empty"><h3>Qual é a sua caixinha do Meli+?</h3><p>Escolha a caixinha ou crie uma nova para acompanhar aqui.</p>${cxs.length&&!ro?`<div class="actions" style="justify-content:center;flex-wrap:wrap">${cxs.map(c=>`<button class="btn" data-meli-escolher="${c.id}">${esc(c.nome)}</button>`).join('')}</div>`:''}${ro?'':`<button class="btn pri" style="margin-top:10px" data-act="novo-pote" data-tipo="caixinha">${svg('plus')}Nova caixinha</button>`}</div>`+meliuzMini(); }
+  const id=p.id, sd=potSaldo(p), a=assinaturaCalc(p), rendT=potRend(p);
+  const tm=thisMonth(), feitoMes=!!(p.acomp||{})[tm], rendMes=sum((p.movimentos||[]).filter(m=>m.tipo==='rendimento'&&m.data.startsWith(tm)),m=>m.valor);
+  h+= ro?'':`<div class="actions" style="margin:-6px 0 14px;flex-wrap:wrap"><button class="btn pri" data-act="atualizar-saldo" data-pote="${id}">Atualizar saldo</button><button class="btn" data-act="assin-mes" data-pote="${id}">${svg('plus')}Lançar mês</button><button class="btn" data-act="novo-mov" data-pote="${id}" data-tipo="aporte">Guardar</button><button class="btn ghost" data-act="novo-mov" data-pote="${id}" data-tipo="resgate">Resgatar</button><button class="btn ghost" data-act="editar-pote" data-pote="${id}">Editar</button></div>`;
+  h+=`<div class="grid g4"><div class="card stat hero"><div class="lbl">Saldo na caixinha</div><div class="val">${fmt(sd)}</div><div class="ft">${esc(p.nome)}${p.instituicao?' · '+esc(p.instituicao):''}</div></div>
+    <div class="card stat"><div class="lbl">Rendeu em ${mShort(tm)}</div><div class="val sm pos">${fmt(rendMes)}</div><div class="ft">Rendeu ${fmt(rendT)} no total</div></div>
+    <div class="card stat"><div class="lbl">Mensalidade</div><div class="val sm neg">${fmt(+p.mensalidade||0)}</div><div class="ft">${a.linhas.length} ${a.linhas.length===1?'mês lançado':'meses lançados'}</div></div>
+    <div class="card stat"><div class="lbl">Vale a pena?</div><div class="val sm ${a.saldo>=0?'pos':'neg'}">${a.saldo>=0?'+':''}${fmt(a.saldo)}</div><div class="ft">${a.linhas.length?(a.saldo>=0?'Está se pagando':'Não está compensando'):'Lance o primeiro mês'}</div></div></div>`;
+  if(!ro&&!feitoMes) h+=`<div class="banner section" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><span><b>${mLabel(tm)} ainda não foi lançado.</b> Abra o app do Mercado Pago e toque em "Atualizar saldo": a diferença entra sozinha como rendimento.</span><button class="btn sm pri" data-act="assin-mes" data-pote="${id}">Lançar ${mShort(tm)}</button></div>`;
+  h+=`<div class="section">${assinaturaHtml(id,{...p,mensalidade:p.mensalidade||0,acomp:p.acomp||{}})}</div>`;
+  const movs=[...(p.movimentos||[])].sort((x,y)=>y.data.localeCompare(x.data)).slice(0,UI.meliAll?999:10);
+  const TPM={aporte:['Guardou','pos','+'],resgate:['Resgatou','neg','−'],rendimento:['Rendimento','pos','+']};
+  h+=`<div class="card section"><div class="card-h"><div><h2>Movimentações</h2><p>${(p.movimentos||[]).length} no total</p></div>${(p.movimentos||[]).length>10&&!UI.meliAll?`<button class="btn sm ghost" data-meli-all>Ver todas</button>`:''}</div><div class="rows">${movs.map(m=>{const t=TPM[m.tipo]||['Movimento','','']; return `<div class="row">${dBox(m.data)}<div class="grow"><div class="t">${t[0]}</div>${m.obs?`<div class="s">${esc(m.obs)}</div>`:''}</div><span class="v ${m.valor<0?'neg':t[1]}">${m.valor<0?'−':t[2]}${fmt(Math.abs(m.valor))}</span></div>`;}).join('')||'<p class="muted">Nada ainda.</p>'}</div></div>`;
+  h+=`<p class="note">"Atualizar saldo": digite o saldo que aparece no Mercado Pago e o app lança a diferença como rendimento. "Lançar mês": mensalidade, cashback (que também entra no saldo da caixinha) e rendimento do mês.</p>`;
+  return h+meliuzMini();
+}
+function meliuzMini(){
+  const L=S.meliuz.lancamentos||[]; const t=k=>sum(L.filter(x=>x.tipo===k),x=>x.valor);
+  const ganho=t('cashback')+t('rendimento')+t('ajuste'), res=ganho-t('assinatura'), saldo=ganho+t('inicial')-t('retirada');
+  return `<div class="card section" style="padding:12px 16px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)">${svg('meliuz','width="18" height="18" style="stroke:currentColor;fill:none;stroke-width:2"')}</span>
+    <div style="flex:1;min-width:160px"><div style="font-weight:700">Méliuz</div><div class="muted" style="font-size:.8rem">Saldo ${fmt(saldo)} · ${res>=0?'+':''}${fmt(res)} ${res>=0?'de lucro':'de prejuízo'}</div></div>
+    ${readonlyView()?'':`<button class="btn sm" data-act="novo-cashback">${svg('plus')}Lançar</button>`}<button class="btn sm ghost" data-go="meliuz">Detalhes</button></div></div>`;
+}
 function vMeliuz(){
   const L=[...(S.meliuz.lancamentos||[])].sort((a,b)=>b.data.localeCompare(a.data));
   const t=(k,y)=>sum(L.filter(x=>x.tipo===k&&(!y||x.data.startsWith(y))),x=>x.valor);
   const ganhoF=y=>t('cashback',y)+t('rendimento',y)+t('ajuste',y);
   const ganho=ganhoF(), ass=t('assinatura'), res=ganho-ass, saldo=ganho+t('inicial')-t('retirada');
   const cx=meliuzCx();
-  let h = head('Dia a dia','Méliuz','Cashback que entra, assinatura que sai: o Méliuz está valendo a pena?', readonlyView()?'':`<div class="actions">${(S.meliuz.lancamentos||[]).length?`<button class="btn ghost" data-act="mz-zerar">Começar do zero</button>`:''}<button class="btn pri" data-act="novo-cashback">${svg('plus')}Lançar</button></div>`);
+  let h = head('Dia a dia','Méliuz','Cashback que entra, assinatura que sai: o Méliuz está valendo a pena?', readonlyView()?`<button class="btn ghost" data-go="melimais">← Meli+</button>`:`<div class="actions"><button class="btn ghost" data-go="melimais">← Meli+</button>${(S.meliuz.lancamentos||[]).length?`<button class="btn ghost" data-act="mz-zerar">Começar do zero</button>`:''}<button class="btn pri" data-act="novo-cashback">${svg('plus')}Lançar</button></div>`);
   if(S.meliuz.desde) h += `<p class="note" style="margin:-6px 0 12px">Contando desde ${S.meliuz.desde.split('-').reverse().join('/')}, quando você recomeçou.${S.meliuz.anterior?` <button class="linkbtn" data-act="mz-desfazer-zerar">Trazer de volta o histórico antigo</button>`:''}</p>`;
   if(!L.length) return h+`<div class="card empty"><h3>Nada lançado ainda</h3><p>Lance os cashbacks que caem, a assinatura que você paga e as retiradas para acompanhar se o Méliuz compensa.</p><button class="btn pri" data-act="novo-cashback">Lançar</button></div>`;
   const ok=res>=0, perto=Math.abs(res)<5;
@@ -1815,17 +1847,20 @@ const ACT = {
       {name:'mes',label:'Mês',type:'month',value:mk,req:true},
       {type:'row',items:[{name:'pagou',label:'Quanto pagou de mensalidade',type:'money',value:br(cur.pagou??p.mensalidade)},{name:'cashback',label:'Cashback que recebeu',type:'money',value:br(cur.cashback)}]},
       {name:'rend',label:'Rendimento da caixinha no mês',type:'money',value:br(rendM)},
+      {name:'cbcx',label:'O cashback caiu na caixinha (soma no saldo dela)',type:'check',value:cur.cbcx!=null?cur.cbcx:!Object.keys(cur).length},
     ], extra:`<p class="note" style="margin-top:-4px">O rendimento também entra no saldo da caixinha e na tela de Rendimentos.</p>`,
     onSubmit:v=>{
       const m=v.mes; if(!/^\d{4}-\d{2}$/.test(m)) return 'Escolha o mês';
-      const q=JSON.parse(JSON.stringify(p)); q.acomp=q.acomp||{}; q.acomp[m]={pagou:parseNum(v.pagou),cashback:parseNum(v.cashback)};
+      const q=JSON.parse(JSON.stringify(p)); q.acomp=q.acomp||{}; q.acomp[m]={pagou:parseNum(v.pagou),cashback:parseNum(v.cashback),cbcx:!!v.cbcx};
+      q.movimentos=(q.movimentos||[]).filter(x=>!(x.tipo==='aporte'&&x.data.startsWith(m)&&x.obs==='Cashback do Meli+'));
+      if(v.cbcx&&parseNum(v.cashback)>0) q.movimentos.push({id:uid('m'),data:m+'-28',tipo:'aporte',valor:r2(parseNum(v.cashback)),obs:'Cashback do Meli+'});
       const nr=r2(parseNum(v.rend)); q.movimentos=(q.movimentos||[]).filter(x=>!(x.tipo==='rendimento'&&x.data.startsWith(m)&&x.obs==='Rendimento do mês'));
       const outros=sum(q.movimentos.filter(x=>x.tipo==='rendimento'&&x.data.startsWith(m)),x=>x.valor);
       if(Math.abs(nr-outros)>=0.005) q.movimentos.push({id:uid('m'),data:m+'-28',tipo:'rendimento',valor:r2(nr-outros),obs:'Rendimento do mês'});
-      save('potes',d.pote,q); setTimeout(()=>openPote(d.pote),30); toast(mLabel(m)+' salvo');
+      save('potes',d.pote,q); reabrirPote(d.pote); toast(mLabel(m)+' salvo');
     }});
   },
-  'assin-del'(d){ const q=JSON.parse(JSON.stringify(S.potes[d.pote])); if(q.acomp) delete q.acomp[d.mes]; save('potes',d.pote,q); setTimeout(()=>openPote(d.pote),30); },
+  'assin-del'(d){ const q=JSON.parse(JSON.stringify(S.potes[d.pote])); if(q.acomp) delete q.acomp[d.mes]; save('potes',d.pote,q); reabrirPote(d.pote); },
   'alvo'(){
     const alvo=Object.assign({},ALVO_PADRAO,S.config.alvo||{});
     form({title:'Alocação e meta', fields:[
@@ -2758,6 +2793,8 @@ document.addEventListener('click', e=>{
   const dro = t.closest('[data-del-role]'); if(dro){ saveFundo({...C.fundo,lancamentos:(C.fundo.lancamentos||[]).filter(l=>l.id!==dro.dataset.delRole)}); return; }
   if(t.closest('[data-roleall]')){ UI.roleAll=true; render(); return; }
   const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); const mvd=q.movimentos.find(m=>m.id===dmc.dataset.delMovCasal); if(mvd&&mvd.gasto&&mvd.quem===C.me) tirarDoGasto(mvd.gasto); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
+  const mes1=t.closest('[data-meli-escolher]'); if(mes1){ S.config={...S.config,meliMaisId:mes1.dataset.meliEscolher}; save('config','geral',S.config); return; }
+  if(t.closest('[data-meli-all]')){ UI.meliAll=true; render(); return; }
   const goB = t.closest('[data-go]'); if(goB){ if(goB.dataset.fatmes){ UI.fatMes=goB.dataset.fatmes; UI.cTab='parcelas'; } go(goB.dataset.go); return; }
   if(t.closest('[data-more]')){ document.getElementById('more').classList.toggle('open'); return; }
   if(t.id==='more'){ t.classList.remove('open'); return; }
@@ -2880,7 +2917,7 @@ function render(){
   pickMonth();
   // keep focus on inline inputs across re-render
   const ae=document.activeElement; const key = ae && ae.id ? '#'+ae.id : (ae && ae.dataset && ae.dataset.item ? `[data-item="${ae.dataset.item}"][data-f="${ae.dataset.f}"]` : null);
-  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz,emprestimos:vEmprestimos,patrimonio:vPatrimonio,casal:vCasal,'casal-cx':vCasalCx,'casal-role':vRole};
+  const V={inicio:vInicio,gastos:vGastos,cartao:vCartao,caixinhas:vCaixinhas,reserva:vReserva,investimentos:vInvest,rendimentos:vRend,carteira:vCarteira,meliuz:vMeliuz,melimais:vMeliMais,emprestimos:vEmprestimos,patrimonio:vPatrimonio,casal:vCasal,'casal-cx':vCasalCx,'casal-role':vRole};
   if(UI.perfil==='casal' && !UI.view.startsWith('casal')) UI.view='casal';
   if(UI.perfil!=='casal' && UI.view.startsWith('casal')) UI.view='inicio';
   const _cn = UI.perfil!=='casal' ? nomeView(UI.view) : null;
