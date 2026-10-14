@@ -949,6 +949,29 @@ function cartaoPorCategoria(mk){
       return `<details class="row" style="display:block;padding:8px 0"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px"><i class="dot" style="background:${cor}"></i><div class="grow"><div style="display:flex;justify-content:space-between;gap:8px"><span class="t">${c?(CAT_ICON[k]?`<span class="emo">${CAT_ICON[k]}</span> `:'')+esc(c.n):'Sem categoria'}</span><span class="v">${fmt(v)} <span class="muted" style="font-weight:500;font-size:.78rem">${pc.toLocaleString('pt-BR',{maximumFractionDigits:0})}%</span></span></div><div style="height:6px;border-radius:3px;background:var(--surface-2);margin-top:5px"><i style="display:block;height:100%;width:${pc}%;background:${cor};border-radius:3px"></i></div></div></summary>
         <div style="padding:6px 0 2px 20px">${l.sort((a,b)=>b.valor-a.valor).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:.84rem;padding:3px 0"><span>${esc(x.desc)} <span class="muted">· ${esc(x.info)}${x.cat&&x.cat.includes('|')&&semAcento(x.cat.split('|')[1])!==semAcento(x.desc)?' · '+esc(x.cat.split('|')[1]):''}</span></span><span class="num">${fmt(x.valor)}</span></div>`).join('')}</div></details>`; }).join('')}</div></div>`;
 }
+function gastoAnualCartao(){
+  // gasto no cartão mês a mês no ano: valor do banco quando informado; antes de usar o app, o que saiu da caixinha do cartão; depois, a fatura calculada
+  const ano=UI.cartAno||thisMonth().slice(0,4), ms=Array.from({length:12},(_,i)=>ano+'-'+String(i+1).padStart(2,'0'));
+  const inicioApp=Object.keys(S.cartao).sort()[0]||thisMonth(), cx=potesList().find(p=>p.tipo==='cartao');
+  const cards=[...new Set([...cartoesFatura(),...ms.flatMap(m=>Object.keys((S.cinfo.faturas||{})[m]||{}))])];
+  const by={}; cards.forEach(c=>by[c]=ms.map(()=>0)); const hist=ms.map(()=>0); let temPrev=false;
+  ms.forEach((m,i)=>{ const inf=(S.cinfo.faturas||{})[m]||{};
+    if(Object.keys(inf).length){ Object.entries(inf).forEach(([c,v])=>{ (by[c]=by[c]||ms.map(()=>0))[i]=+v||0; }); return; }
+    if(m<inicioApp){ if(cx) hist[i]=sum((cx.movimentos||[]).filter(x=>x.tipo==='resgate'&&x.data.startsWith(m)),x=>x.valor); return; }
+    cards.forEach(c=>{ by[c][i]=Math.max(0,composicaoFatura(c,m).tot); }); if(m>thisMonth()) temPrev=true; });
+  const ser=Object.keys(by).map(c=>({name:c==='MP'?'Mercado Pago':c,color:CARD_COLOR(c),values:by[c]}));
+  if(hist.some(v=>v>0)) ser.unshift({name:'Pago pela caixinha',color:'var(--c2)',values:hist});
+  const tot=ms.map((_,i)=>sum(ser,x=>x.values[i])), totAno=sum(tot), ate=ms.filter(m=>m<=thisMonth()), feitos=tot.filter((v,i)=>ms[i]<=thisMonth()&&v>0);
+  const maior=Math.max(0,...tot), iMaior=tot.indexOf(maior);
+  const anos=[...new Set([...Object.keys(S.cartao).map(k=>k.slice(0,4)),...((cx&&cx.movimentos)||[]).map(x=>x.data.slice(0,4)),thisMonth().slice(0,4)])].sort();
+  const ia=anos.indexOf(ano);
+  return `<div class="card"><div class="card-h"><div><h2>Gasto no cartão em ${ano}</h2><p>Fatura de cada mês, somando os cartões${temPrev?'. Os meses que ainda não chegaram são previstos':''}</p></div>
+      <div class="monthpick"><button data-cart-ano="${anos[ia-1]||''}" ${ia>0?'':'disabled'} aria-label="Ano anterior">${svg('left','width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:2"')}</button><span>${ano}</span><button data-cart-ano="${anos[ia+1]||''}" ${ia<anos.length-1?'':'disabled'} aria-label="Próximo ano">${svg('right','width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:2"')}</button></div></div>
+    <div class="grid g3" style="gap:10px;margin-bottom:12px"><div class="stat"><div class="lbl">Total ${ano===thisMonth().slice(0,4)?'até agora':'no ano'}</div><div class="val sm">${fmt(sum(tot.filter((v,i)=>ms[i]<=thisMonth())))}</div>${totAno-sum(tot.filter((v,i)=>ms[i]<=thisMonth()))>0.004?`<div class="ft">+ ${fmt(totAno-sum(tot.filter((v,i)=>ms[i]<=thisMonth())))} previsto até dez</div>`:''}</div>
+      <div class="stat"><div class="lbl">Média por mês</div><div class="val sm">${fmt(feitos.length?sum(feitos)/feitos.length:0)}</div></div>
+      <div class="stat"><div class="lbl">Mês mais caro</div><div class="val sm">${maior?fmt(maior):'—'}</div><div class="ft">${maior?mLabel(ms[iMaior]):''}</div></div></div>
+    ${barChart({labels:ms.map(mShort),series:ser,stacked:true})}${legend(ser)}</div>`;
+}
 function vCompras(){
   const mk=UI.month, cards=S.config.cartoes||['Nubank'];
   const all = [...(S.cartao[mk]?.compras||[])];
@@ -967,11 +990,10 @@ function vCompras(){
     ${list.length?`<div class="rows">${list.map(c=>`<div class="row">${dBox(c.data)}<div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">${esc(c.cartao)}${c.guardado?' · <span style="color:#1f3f8f;font-weight:600">guardado</span>':''}${c.parcela?' · <span class="pill warn" style="padding:1px 7px">'+esc(c.parcela)+'</span>':''}· <button class="btn sm ghost" style="padding:0 2px;font-size:.78rem;font-weight:500" data-act="compra-cat" data-id="${c.id}" data-mk="${mk}">${c.cat&&CAT[c.cat.split('|')[0]]?`<i class="dot" style="background:${CAT[c.cat.split('|')[0]].c};width:7px;height:7px"></i> ${esc(c.cat.split('|')[1])}`:'+ categoria'}</button></div></div><span class="v">${fmt(c.valor)}</span><button class="iconbtn" aria-label="Apagar ${esc(c.desc)}" data-del-compra="${c.id}">${svg('trash')}</button></div>`).join('')}</div>`:`<div class="empty"><p>Nenhuma compra ${f==='Todos'?'':'no '+esc(f)+' '}em ${mLabel(mk).toLowerCase()}.</p><p class="muted" style="margin:0;font-size:.84rem">Use o botão <b>+</b> para lançar.</p></div>`}
   </div>`;
   const ks = monthsAll().filter(k=>S.cartao[k]).slice(-8);
-  const ser = cards.map((cn,i)=>({name:cn,color:['var(--c8)','var(--c4)','var(--c1)','var(--c7)','var(--c3)'][i%5],values:ks.map(k=>faturaOf(k,cn))}));
   // recorrentes
   const rec={}; ks.forEach(k=>(S.cartao[k].compras||[]).forEach(c=>{const n=c.desc.trim().toLowerCase(); rec[n]=rec[n]||{d:c.desc.trim(),n:0,v:0}; rec[n].n++; rec[n].v+=c.valor;}));
   const top = Object.values(rec).filter(r=>r.n>1).sort((a,b)=>b.v-a.v).slice(0,7);
-  h += `<div class="grid g21 section"><div class="card"><div class="card-h"><div><h2>Fatura por mês</h2><p>Soma das compras lançadas, por cartão</p></div></div>${barChart({labels:ks.map(mShort),series:ser,stacked:true})}${legend(ser)}</div>
+  h += `<div class="grid g21 section">${gastoAnualCartao()}
     <div class="card"><div class="card-h"><div><h2>O que mais se repete</h2><p>Compras recorrentes nos últimos meses</p></div></div>${top.length?`<div class="rows">${top.map(r=>`<div class="row" style="padding:7px 0"><div class="grow"><div class="t">${esc(r.d)}</div><div class="s">${r.n} vezes</div></div><span class="v">${fmt(r.v)}</span></div>`).join('')}</div>`:'<p class="muted">Ainda sem recorrências.</p>'}</div></div>`;
   return h;
 }
@@ -2795,6 +2817,7 @@ document.addEventListener('click', e=>{
   const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); const mvd=q.movimentos.find(m=>m.id===dmc.dataset.delMovCasal); if(mvd&&mvd.gasto&&mvd.quem===C.me) tirarDoGasto(mvd.gasto); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
   const mes1=t.closest('[data-meli-escolher]'); if(mes1){ S.config={...S.config,meliMaisId:mes1.dataset.meliEscolher}; save('config','geral',S.config); return; }
   if(t.closest('[data-meli-all]')){ UI.meliAll=true; render(); return; }
+  const ca=t.closest('[data-cart-ano]'); if(ca){ if(ca.dataset.cartAno){ UI.cartAno=ca.dataset.cartAno; render(); } return; }
   const goB = t.closest('[data-go]'); if(goB){ if(goB.dataset.fatmes){ UI.fatMes=goB.dataset.fatmes; UI.cTab='parcelas'; } go(goB.dataset.go); return; }
   if(t.closest('[data-more]')){ document.getElementById('more').classList.toggle('open'); return; }
   if(t.id==='more'){ t.classList.remove('open'); return; }
