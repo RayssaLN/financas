@@ -965,9 +965,9 @@ function gastoAnualCartao(){
     const ehConta=x=>!x.parcela&&(S.cinfo.contas||[]).some(c=>c.cartao===x.cartao&&semAcento(c.desc)===semAcento(x.desc));
     (S.cartao[m]?.compras||[]).filter(x=>!ehConta(x)).forEach(x=>add(x.cartao,i,+x.valor||0));
     deb[i]=sum(((S.orc[m]||{}).avulsos||[]).filter(a=>a.forma==='debito'),a=>+a.valor||0); });
-  const ser=Object.keys(by).map(c=>({name:c==='MP'?'Mercado Pago':c,color:CARD_COLOR(c),values:by[c]}));
-  if(plan.some(v=>v>0)) ser.unshift({name:'Crédito (da planilha)',color:'var(--c2)',values:plan});
-  if(deb.some(v=>v>0)) ser.push({name:'Débito',color:'var(--c7)',values:deb});
+  // só duas cores: crédito (todos os cartões + o que veio da planilha) e débito
+  const cred=ms.map((_,i)=>plan[i]+sum(Object.values(by),v=>v[i]));
+  const ser=[{name:'Crédito',color:'var(--accent)',values:cred},{name:'Débito',color:'var(--c4)',values:deb}];
   const tot=ms.map((_,i)=>sum(ser,x=>x.values[i])), totAno=sum(tot), ate=ms.filter(m=>m<=thisMonth()), feitos=tot.filter((v,i)=>ms[i]<=thisMonth()&&v>0);
   const maior=Math.max(0,...tot), iMaior=tot.indexOf(maior);
   const anos=[...new Set([...Object.keys(S.cartao).map(k=>k.slice(0,4)),...((cx&&cx.movimentos)||[]).map(x=>x.data.slice(0,4)),thisMonth().slice(0,4)])].sort();
