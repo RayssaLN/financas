@@ -1308,7 +1308,8 @@ function vReserva(){
 }
 
 function vInvest(){
-  const inv = potesList('investimento');
+  // a conta da corretora (Conta Clear) é saldo parado, não investimento: aparece só em Análise da carteira
+  const cc=contaCorretora(); const inv = potesList('investimento').filter(p=>!cc||p.id!==cc.id);
   let h = head('Investir','Investimentos','Corretora, cripto, renda fixa, exterior e o que mais você tiver', `<button class="btn pri" data-act="novo-pote" data-tipo="investimento">${svg('plus')}Novo investimento</button>`);
   const investido=p=>potAportado(p)+sum((p.movimentos||[]).filter(m=>m.tipo==='ajuste'),m=>m.valor);
   const tot=sum(inv,potSaldo), ap=sum(inv,investido), rd=sum(inv,potRend);
@@ -1338,6 +1339,54 @@ function rendFontes(){
   return out;
 }
 const FONTES=[['Reserva de emergência','var(--accent)'],['Caixinha do cartão','var(--c7)'],['Outras caixinhas','var(--c3)'],['Investimentos','var(--c4)'],['Proventos Brasil','var(--c1)'],['Proventos exterior','var(--c5)']];
+function contaExterior(){ return potesList().find(p=>p.tipo==='investimento'&&p.classe==='Exterior'); }
+const EXT_PADRAO=['NVDA','AAPL','MSFT','TFLO','VT'];
+const ehExterior=a=>{ a=(a||'').toUpperCase().trim(); if(!a) return false; if(EXT_PADRAO.includes(a)) return true; const prev=(S.prov.itens||[]).find(x=>x.ativo===a); if(prev) return prev.classe==='Exterior'; return !/\d$/.test(a); };
+function provForm(pais0){
+  let pais=pais0, mexeuPais=false, mexeuImp=false;
+  const cBR=contaCorretora(), cEX=contaExterior(), cot0=S.config.ultimaCotacao||'';
+  const br=v=>v?r2(v).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  const draw=()=>{ const ex=pais==='ex', c=ex?cEX:cBR;
+    const tipos=ex?['Dividendos','Distribuição de ETF','Juros']:['Rendimentos','Dividendos','Juros sobre capital','Frações'];
+    document.getElementById('pv-campos').innerHTML = ex ? `
+      <div class="frow"><div class="field"><label for="pv-bruto">Valor bruto (US$)</label><input id="pv-bruto" inputmode="decimal" placeholder="0,00"></div><div class="field"><label for="pv-imp">Imposto retido (US$)</label><input id="pv-imp" inputmode="decimal" placeholder="0,00"></div></div>
+      <div class="frow"><div class="field"><label for="pv-cot">Cotação do dólar (R$)</label><input id="pv-cot" inputmode="decimal" placeholder="Ex.: 5,40" value="${esc(cot0?br(cot0):'')}"></div><div class="field"><label for="pv-tipo">Tipo</label><select id="pv-tipo">${tipos.map(t=>`<option>${t}</option>`).join('')}</select></div></div>
+      <div class="saldo-box" id="pv-res" style="margin-top:4px"></div>`
+    : `<div class="frow"><div class="field"><label for="pv-valor">Valor recebido (R$)</label><input id="pv-valor" inputmode="decimal" placeholder="0,00"></div><div class="field"><label for="pv-tipo">Tipo</label><select id="pv-tipo">${tipos.map(t=>`<option>${t}</option>`).join('')}</select></div></div>`;
+    document.getElementById('pv-conta').innerHTML = c ? `<label class="field" style="flex-direction:row;align-items:center;gap:8px;font-size:.86rem"><input type="checkbox" id="pv-naconta" checked style="width:auto">Caiu na ${esc(c.nome)}${c.instituicao?' ('+esc(c.instituicao)+')':''}: soma no saldo dela</label>` : '';
+    document.querySelectorAll('#pv-pais button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===pais));
+    if(ex){ const calc=()=>{ const bru=parseNum(document.getElementById('pv-bruto').value), imp=parseNum(document.getElementById('pv-imp').value), cot=parseNum(document.getElementById('pv-cot').value); const liq=r2(Math.max(0,bru-imp));
+        document.getElementById('pv-res').innerHTML=`<div><div class="sb-l">Líquido</div><div class="sb-v">US$ ${br(liq)||'0,00'}</div></div><div style="text-align:right"><div class="sb-l">Em reais</div><div class="sb-v">${cot?fmt(liq*cot):'informe a cotação'}</div></div>`; };
+      document.getElementById('pv-bruto').addEventListener('input',()=>{ if(!mexeuImp){ const bru=parseNum(document.getElementById('pv-bruto').value); document.getElementById('pv-imp').value=bru?br(bru*0.3):''; } calc(); });
+      document.getElementById('pv-imp').addEventListener('input',()=>{ mexeuImp=true; calc(); });
+      document.getElementById('pv-cot').addEventListener('input',calc); calc(); }
+  };
+  modal(`<form id="pvf"><h3>Novo provento</h3>
+    <div class="field"><label>Onde</label><div class="seg" id="pv-pais"><button type="button" data-v="br" aria-pressed="${pais==='br'}">🇧🇷 Brasil</button><button type="button" data-v="ex" aria-pressed="${pais==='ex'}">🌎 Exterior</button></div></div>
+    <div class="frow"><div class="field"><label for="pv-ativo">Ativo</label><input id="pv-ativo" placeholder="Ex.: KNRI11, NVDA" autocomplete="off" required></div><div class="field"><label for="pv-data">Data</label><input type="date" id="pv-data" value="${todayISO()}"></div></div>
+    <div id="pv-campos"></div><div id="pv-conta"></div>
+    <p class="note" id="pv-nota" style="margin-top:2px">${pais==='ex'?'No exterior, os EUA costumam reter 30% do provento. O imposto já vem preenchido com 30%; ajuste se o seu extrato mostrar outro valor.':''}</p>
+    <div class="foot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn pri" type="submit">Salvar</button></div></form>`);
+  draw();
+  const setPais=v=>{ pais=v; draw(); document.getElementById('pv-nota').textContent=pais==='ex'?'No exterior, os EUA costumam reter 30% do provento. O imposto já vem preenchido com 30%; ajuste se o seu extrato mostrar outro valor.':''; };
+  document.getElementById('pv-pais').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; mexeuPais=true; setPais(b.dataset.v); });
+  document.getElementById('pv-ativo').addEventListener('input',e=>{ if(mexeuPais) return; const ex=ehExterior(e.target.value)?'ex':'br'; if(ex!==pais&&e.target.value.trim().length>=2) setPais(ex); });
+  setTimeout(()=>document.getElementById('pv-ativo').focus(),30);
+  document.getElementById('pvf').addEventListener('submit',e=>{ e.preventDefault();
+    const a=document.getElementById('pv-ativo').value.trim().toUpperCase(), data=document.getElementById('pv-data').value||todayISO(), tipo=document.getElementById('pv-tipo').value;
+    if(!a){ toast('Informe o ativo'); return; }
+    const nc=document.getElementById('pv-naconta'), conta=pais==='ex'?cEX:cBR; let item;
+    if(pais==='ex'){ const bru=r2(parseNum(document.getElementById('pv-bruto').value)), imp=r2(parseNum(document.getElementById('pv-imp').value)), cot=parseNum(document.getElementById('pv-cot').value);
+      if(!bru){ toast('Informe o valor bruto'); return; } if(!cot){ toast('Informe a cotação do dólar'); return; }
+      const liq=r2(bru-imp); item={id:uid('v'),data,ativo:a,tipo,classe:'Exterior',usd:bru,impostoUsd:imp,cotacao:cot,valor:r2(liq*cot),liquido:true};
+      S.config={...S.config,ultimaCotacao:cot}; save('config','geral',S.config);
+    } else { const val=r2(parseNum(document.getElementById('pv-valor').value)); if(!val){ toast('Informe o valor'); return; }
+      const FII=/11$/.test(a)&&((S.prov.itens||[]).some(x=>x.ativo===a&&x.classe==='FIIs')||tipo==='Rendimentos');
+      item={id:uid('v'),data,valor:val,ativo:a,tipo,classe:FII||tipo==='Rendimentos'?'FIIs':'Ações'}; }
+    if(nc&&nc.checked&&conta){ const q=JSON.parse(JSON.stringify(S.potes[conta.id])); q.movimentos=q.movimentos||[]; const mid=uid('m'); q.movimentos.push({id:mid,data,tipo:'aporte',valor:item.valor,obs:'Provento '+a+' ('+tipo.toLowerCase()+')'}); save('potes',conta.id,q); item.conta={pote:conta.id,mov:mid}; }
+    save('proventos','lista',{...S.prov,itens:[...(S.prov.itens||[]),item]}); closeModal(); UI.provAba=pais;
+    toast('Provento lançado · '+fmt(item.valor)+(item.conta?' na '+conta.nome:'')); });
+}
 function vRend(){
   const F=rendFontes(); const anos=[...new Set(Object.keys(F).map(m=>m.slice(0,4)))].sort();
   const ano = UI.rendAno && anos.includes(UI.rendAno) ? UI.rendAno : (anos[anos.length-1]||thisMonth().slice(0,4));
@@ -1361,15 +1410,20 @@ function vRend(){
   h += `<div class="card section"><div class="card-h"><div><h2>Ano a ano</h2><p>Como a aba "Rend. anual" da sua planilha</p></div></div><div class="tbl-wrap"><table><thead><tr><th>Ano</th>${fAll.map(([f,c])=>`<th class="r"><span class="who" style="font-size:.66rem;white-space:nowrap"><i style="background:${c}"></i>${({'Reserva de emergência':'Reserva','Caixinha do cartão':'Cx. cartão','Outras caixinhas':'Caixinhas','Investimentos':'Invest.','Proventos Brasil':'Prov. BR','Proventos exterior':'Prov. ext.'})[f]||f}</span></th>`).join('')}<th class="r">Total</th></tr></thead><tbody>
     ${anos.map(y=>`<tr><td><b>${y}</b></td>${fAll.map(([f])=>`<td class="r">${yv(y,f)?fmt(yv(y,f)):'<span class="muted">—</span>'}</td>`).join('')}<td class="r"><b class="pos">${fmt(yv(y))}</b></td></tr>`).join('')}
     </tbody><tfoot><tr><td>Total</td>${fAll.map(([f])=>`<td class="r">${fmt(sum(anos,y=>yv(y,f)))}</td>`).join('')}<td class="r">${fmt(totalGeral)}</td></tr></tfoot></table></div></div>`;
-  // proventos itemizados do ano
-  const pv=(S.prov.itens||[]).filter(x=>x.data.startsWith(ano));
-  if(pv.length){
-    const byA={}; pv.forEach(x=>{ const b=byA[x.ativo]||(byA[x.ativo]={v:0,n:0,c:x.classe}); b.v+=x.valor; b.n++; });
+  // proventos do ano, separados em Brasil e exterior
+  const aba=UI.provAba==='ex'?'ex':'br', exA=aba==='ex';
+  const todos=(S.prov.itens||[]).filter(x=>(x.classe==='Exterior')===exA);
+  const pv=todos.filter(x=>x.data.startsWith(ano));
+  const nBR=(S.prov.itens||[]).filter(x=>x.classe!=='Exterior'&&x.data.startsWith(ano)).length, nEX=(S.prov.itens||[]).filter(x=>x.classe==='Exterior'&&x.data.startsWith(ano)).length;
+  const usd=v=>'US$ '+r2(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  h += `<div class="seg section" style="max-width:420px">${[['br','🇧🇷 Brasil',nBR],['ex','🌎 Exterior',nEX]].map(([k,t,n])=>`<button type="button" data-prov-aba="${k}" aria-pressed="${aba===k}">${t} <span class="muted" style="font-weight:500">${n}</span></button>`).join('')}</div>`;
+  if(exA&&pv.length){ const bru=sum(pv,x=>+x.usd||0), imp=sum(pv,x=>+x.impostoUsd||0);
+    h += `<div class="grid g3" style="margin-top:12px"><div class="card stat"><div class="lbl">Bruto em ${ano}</div><div class="val sm">${usd(bru)}</div></div><div class="card stat"><div class="lbl">Imposto retido</div><div class="val sm neg">${usd(imp)}</div><div class="ft">${bru?Math.round(imp/bru*100):0}% do bruto</div></div><div class="card stat"><div class="lbl">Recebido em reais</div><div class="val sm pos">${fmt(sum(pv,x=>x.valor))}</div></div></div>`; }
+  { const byA={}; pv.forEach(x=>{ const b=byA[x.ativo]||(byA[x.ativo]={v:0,n:0,c:x.classe}); b.v+=x.valor; b.n++; });
     const top=Object.entries(byA).sort((a,b)=>b[1].v-a[1].v);
-    const rec=[...(S.prov.itens||[])].sort((a,b)=>b.data.localeCompare(a.data));
-    h += `<div class="grid g2 section"><div class="card"><div class="card-h"><div><h2>Quem mais pagou em ${ano}</h2><p>Proventos por ativo</p></div></div><div class="rows">${top.slice(0,10).map(([k,b])=>`<div class="row" style="padding:7px 0"><i class="dot" style="background:${b.c==='Exterior'?'var(--c5)':'var(--c1)'}"></i><div class="grow"><div class="t">${esc(k)}</div><div class="s">${b.n} pagamentos${b.c==='Exterior'?' · exterior':''}</div></div><span class="v pos">${fmt(b.v)}</span></div>`).join('')}</div></div>
-      <div class="card"><div class="card-h"><div><h2>Proventos recebidos</h2><p>${rec.length} lançamentos</p></div><button class="btn sm pri" data-act="novo-provento">${svg('plus')}Provento</button></div><div class="rows">${rec.slice(0,UI.provAll?999:10).map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.ativo)}</div><div class="s">${esc(x.tipo)}${x.usd?` · US$ ${x.usd.toLocaleString('pt-BR',{minimumFractionDigits:2})}`:''}</div></div><span class="v pos">+${fmt(x.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-prov="${x.id}">${svg('trash')}</button></div>`).join('')}</div>${rec.length>10&&!UI.provAll?`<button class="btn sm ghost" data-provall>Ver todos (${rec.length})</button>`:''}</div></div>`;
-  }
+    const rec=[...todos].sort((a,b)=>b.data.localeCompare(a.data));
+    h += `<div class="grid g2 section" style="margin-top:12px"><div class="card"><div class="card-h"><div><h2>Quem mais pagou em ${ano}</h2><p>${exA?'Proventos do exterior':'Proventos do Brasil'} por ativo</p></div></div>${top.length?`<div class="rows">${top.slice(0,10).map(([k,b])=>`<div class="row" style="padding:7px 0"><i class="dot" style="background:${exA?'var(--c5)':'var(--c1)'}"></i><div class="grow"><div class="t">${esc(k)}</div><div class="s">${b.n} pagamentos</div></div><span class="v pos">${fmt(b.v)}</span></div>`).join('')}</div>`:`<p class="muted">Nenhum provento ${exA?'do exterior':'do Brasil'} em ${ano}.</p>`}</div>
+      <div class="card"><div class="card-h"><div><h2>Proventos recebidos</h2><p>${rec.length} lançamentos</p></div><button class="btn sm pri" data-act="novo-provento">${svg('plus')}Provento</button></div>${rec.length?`<div class="rows">${rec.slice(0,UI.provAll?999:10).map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.ativo)}</div><div class="s">${esc(x.tipo)}${exA&&x.usd!=null?` · bruto ${usd(x.usd)}${+x.impostoUsd?` · <span class="neg">imposto ${usd(x.impostoUsd)}</span>`:''}`:''}</div></div><span class="v pos">+${fmt(x.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-prov="${x.id}">${svg('trash')}</button></div>`).join('')}</div>${rec.length>10&&!UI.provAll?`<button class="btn sm ghost" style="margin-top:8px" data-provall>Ver todos</button>`:''}`:`<p class="muted">Nada lançado ainda. Toque em "Provento" para lançar.</p>`}</div></div>`; }
   return h;
 }
 const CART_CLASSES = ['Renda fixa','Ações','FIIs','Cripto','Exterior'];
@@ -1843,7 +1897,7 @@ const ACT = {
       const val=parseNum(v.valor); if(!val) return 'Informe um valor';
       const p=JSON.parse(JSON.stringify(S.potes[v.pote])); p.movimentos=p.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,obs:v.obs.trim()};
       if(v.tipo==='aporte' && v.lancar) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
-      p.movimentos.push(mv); save('potes',v.pote,p);
+      espelharNoCasal(v.pote,mv); p.movimentos.push(mv); save('potes',v.pote,p);
       toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado':'Rendimento lançado');
     }});
     const up=()=>{ const el=document.getElementById('mv-saldo'); if(!el) return; const tp=(document.querySelector('#frm .seg[data-name="tipo"]')||{}).dataset?.value, ln=document.getElementById('f-lancar'), dt=(document.getElementById('f-data')||{}).value||todayISO();
@@ -1856,7 +1910,7 @@ const ACT = {
     const p=S.potes[d.pote]; const s=potSaldo(p);
     form({title:'Atualizar saldo de '+p.nome, fields:[{name:'saldo',label:'Saldo que aparece no banco ou corretora hoje',type:'money',req:true,value:r2(s).toLocaleString('pt-BR',{minimumFractionDigits:2})},{name:'data',label:'Data',type:'date',value:todayISO()}],
       extra:`<p class="note" style="margin-top:-4px">Saldo no app: ${fmt(s)}. A diferença entra como rendimento (ou perda).</p>`,
-      onSubmit:v=>{ const n=parseNum(v.saldo), diff=r2(n-s); if(Math.abs(diff)<0.005){ toast('O saldo já está certo'); return; } const q=JSON.parse(JSON.stringify(p)); q.movimentos.push({id:uid('m'),data:v.data,tipo:'rendimento',valor:diff,obs:'Atualização de saldo'}); save('potes',d.pote,q); toast((diff>=0?'Rendeu ':'Variou ')+fmt(diff)); }});
+      onSubmit:v=>{ const n=parseNum(v.saldo), diff=r2(n-s); if(Math.abs(diff)<0.005){ toast('O saldo já está certo'); return; } const q=JSON.parse(JSON.stringify(p)); const mvr={id:uid('m'),data:v.data,tipo:'rendimento',valor:diff,obs:'Atualização de saldo'}; espelharNoCasal(d.pote,mvr); q.movimentos.push(mvr); save('potes',d.pote,q); toast((diff>=0?'Rendeu ':'Variou ')+fmt(diff)); }});
   },
   'novo-pote'(d){ potForm(null, d.tipo||'caixinha', d.reserva==='1'); },
   'editar-pote'(d){ potForm(d.pote); },
@@ -1959,13 +2013,7 @@ const ACT = {
       x.movimentos=x.movimentos||[]; x.movimentos.push({id:uid('m'),data:v.data,tipo:venda?'resgate':'aporte',valor:val,obs:(venda?'Venda ':'Compra ')+q+' '+v.ativo.trim().toUpperCase()});
       save('potes',d.pote,x); setTimeout(()=>openPote(d.pote),30); toast((venda?'Venda':'Compra')+' registrada: '+fmt(val)+(ref?(venda?' · voltou para a conta':' · saiu da conta'):'')); }});
   },
-  'novo-provento'(){ form({title:'Novo provento', fields:[
-      {type:'row',items:[{name:'ativo',label:'Ativo',req:true},{name:'valor',label:'Valor recebido',type:'money',req:true}]},
-      {type:'row',items:[{name:'data',label:'Data',type:'date',value:todayISO()},{name:'tipo',label:'Tipo',type:'select',options:['Rendimentos','Dividendos','Juros sobre capital','Frações']}]},
-      ...((()=>{ const c=contaCorretora(); return c?[{name:'naconta',label:'Caiu na '+c.nome+' (soma no saldo dela)',type:'check',value:true}]:[]; })()),
-    ], onSubmit:v=>{ const a=v.ativo.trim().toUpperCase(), val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; const FII=/11$/.test(a)&&(S.prov.itens||[]).some(x=>x.ativo===a&&x.classe==='FIIs');
-      const ref=v.naconta?movConta('aporte',val,v.data,'Provento '+a+' ('+v.tipo.toLowerCase()+')'):null;
-      const it=[...(S.prov.itens||[]),{id:uid('v'),data:v.data,valor:val,ativo:a,tipo:v.tipo,classe:FII||v.tipo==='Rendimentos'?'FIIs':'Ações',...(ref?{conta:ref}:{})}]; save('proventos','lista',{...S.prov,itens:it}); toast('Provento lançado'+(ref?' · '+fmt(val)+' na '+S.potes[ref.pote].nome:'')); }}); },
+  'novo-provento'(){ provForm(UI.provAba==='ex'?'ex':'br'); },
   'novo-credito'(d){ const prox=UI.fatMes||thisMonth();
     form({title:'Estorno ou crédito na fatura', fields:[{name:'desc',label:'Descrição',req:true,value:'Estorno'},{type:'row',items:[{name:'valor',label:'Valor descontado',type:'money',req:true},{name:'mes',label:'Fatura de',type:'month',value:prox}]}],
       extra:`<p class="note" style="margin-top:-4px">Use quando o banco devolver um valor de uma vez na fatura. As parcelas da compra continuam aparecendo normalmente.</p>`,
@@ -2083,6 +2131,26 @@ function lancarCompraCartao({desc,valor,data,cartao,parcela,tipo,cat,guardado}){
 }
 function opcoesCatCartao(){ const o=opcoesCat(); CATS.forEach(c=>o.push([c.k+'|*',c.n+' › + novo item com esse nome'])); return o; }
 function resolverCat(v,desc){ return v&&v.endsWith('|*') ? v.split('|')[0]+'|'+desc.trim() : v; }
+
+/* ===== caixinha pessoal ligada a uma caixinha do casal: o que entra numa entra na outra ===== */
+function cxLigadaCasal(cid){ return potesList().find(p=>p.vinculoCasal===cid); }
+function espelharNoCasal(poteId,mov){
+  const p=S.potes[poteId]; if(!p||!p.vinculoCasal||!C.on||!C.cpotes[p.vinculoCasal]||mov.tipo==='ajuste') return;
+  const q=JSON.parse(JSON.stringify(C.cpotes[p.vinculoCasal])); q.movimentos=q.movimentos||[]; const id=uid('m');
+  q.movimentos.push({id,data:mov.data,tipo:mov.tipo,valor:mov.valor,quem:C.me,obs:mov.obs||'',espelho:{pote:poteId,mov:mov.id}});
+  mov.espelhoCasal={cx:p.vinculoCasal,mov:id}; saveCasal(p.vinculoCasal,q);
+}
+function espelharNoPessoal(cid,mov){
+  const p=cxLigadaCasal(cid); if(!p||mov.quem!==C.me) return;
+  const q=JSON.parse(JSON.stringify(S.potes[p.id])); q.movimentos=q.movimentos||[]; const id=uid('m');
+  q.movimentos.push({id,data:mov.data,tipo:mov.tipo,valor:mov.valor,obs:(mov.obs||'')||'Caixinha do casal',espelhoCasal:{cx:cid,mov:mov.id}});
+  mov.espelho={pote:p.id,mov:id}; S.potes[p.id]=q; save('potes',p.id,q);
+}
+function tirarEspelho(mov){
+  if(!mov) return;
+  if(mov.espelhoCasal&&C.cpotes[mov.espelhoCasal.cx]){ const q=JSON.parse(JSON.stringify(C.cpotes[mov.espelhoCasal.cx])); const o=(q.movimentos||[]).find(m=>m.id===mov.espelhoCasal.mov); if(o&&o.gasto&&o.quem===C.me) tirarDoGasto(o.gasto); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==mov.espelhoCasal.mov); saveCasal(mov.espelhoCasal.cx,q); }
+  if(mov.espelho&&S.potes[mov.espelho.pote]){ const q=JSON.parse(JSON.stringify(S.potes[mov.espelho.pote])); const o=(q.movimentos||[]).find(m=>m.id===mov.espelho.mov); if(o&&o.gasto) tirarDoGasto(o.gasto); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==mov.espelho.mov); save('potes',mov.espelho.pote,q); }
+}
 function potForm(id, tipo, reserva){
   const p = id? S.potes[id] : {nome:'',tipo,classe:tipo==='caixinha'?'Renda fixa':'Renda fixa',meta:0,cor:POT_COLORS[Object.keys(S.potes).length%POT_COLORS.length],reserva:!!reserva,instituicao:''};
   const t = p.tipo;
@@ -2093,10 +2161,12 @@ function potForm(id, tipo, reserva){
     {name:'mensalidade',label:'Mensalidade para manter (opcional, ex.: Meli+). Ativa o "Vale a pena?"',type:'money',value:p.mensalidade?r2(p.mensalidade).toLocaleString('pt-BR',{minimumFractionDigits:2}):''},
     {name:'cor',label:'Cor',type:'select',options:POT_COLORS.map((c,i)=>[c,['Verde','Azul','Dourado','Roxo','Rosa','Laranja','Menta','Vermelho'][i]]),value:p.cor},
     {name:'saldo',label: id?'':'Saldo que já tem hoje (opcional)',type:'money'},
+    ...(t==='caixinha'&&C.on&&Object.keys(C.cpotes).length?[{name:'vinculo',label:'Ligar a uma caixinha do casal (o que você guardar, resgatar ou render aqui entra lá também, e vice-versa)',type:'select',options:[['','Não ligar'],...cxCasalList().map(c=>[c.id,c.nome])],value:p.vinculoCasal||''}]:[]),
   ].filter(f=>!(id&&f.name==='saldo')),
   extra: id?`<div class="confirm" id="delzone"><span style="flex:1">Apagar ${esc(p.nome)} e todas as movimentações?</span><button type="button" class="btn sm danger" data-act="apagar-pote" data-pote="${id}">Apagar</button></div>`:'',
   onSubmit:v=>{
     const q = id? JSON.parse(JSON.stringify(p)) : {...p, movimentos:[], ordem:Object.keys(S.potes).length+(t==='investimento'?10:0)};
+    if('vinculo' in v){ if(v.vinculo){ const outra=cxLigadaCasal(v.vinculo); if(outra&&outra.id!==id){ return 'A caixinha '+outra.nome+' já está ligada a essa caixinha do casal'; } q.vinculoCasal=v.vinculo; } else delete q.vinculoCasal; }
     q.nome=v.nome.trim(); q.meta=parseNum(v.meta); q.mensalidade=parseNum(v.mensalidade); q.classe=v.classe; q.instituicao=v.instituicao.trim(); q.cor=v.cor;
     if(!id && parseNum(v.saldo)) q.movimentos.push({id:uid('m'),data:todayISO(),tipo:'aporte',valor:parseNum(v.saldo),obs:'Saldo inicial'});
     const nid = id || (q.nome.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)||'pote')+'-'+Math.random().toString(36).slice(2,6);
@@ -2354,7 +2424,7 @@ Object.assign(ACT, {
       {name:'obs',label:'Observação (opcional)'}], extra:'<div id="mvc-saldo"></div>',
     onSubmit:v=>{ const val=parseNum(v.valor); if(!val) return 'Informe um valor'; const q=JSON.parse(JSON.stringify(p)); q.movimentos=q.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,quem:v.quem,obs:v.obs.trim()};
       if(v.tipo==='aporte'&&v.quem===C.me) mv.gasto=lancarNoGasto('poupanca',p.nome+' (casal)',r2(val),v.data,'Guardado em '+p.nome+' (casal)');
-      q.movimentos.push(mv); saveCasal(d.id,q); setTimeout(()=>openCxCasal(d.id),30); toast('Salvo na caixinha do casal'+(mv.gasto?' · '+fmt(val)+' descontado do seu saldo':'')); }});
+      espelharNoPessoal(d.id,mv); q.movimentos.push(mv); saveCasal(d.id,q); setTimeout(()=>openCxCasal(d.id),30); toast('Salvo na caixinha do casal'+(mv.gasto?' · '+fmt(val)+' descontado do seu saldo':'')); }});
     const upc=()=>{ const el=document.getElementById('mvc-saldo'); if(!el) return; const g=n=>(document.querySelector('#frm .seg[data-name="'+n+'"]')||{}).dataset?.value; const dt=(document.getElementById('f-data')||{}).value||todayISO();
       const ehEu=g('quem')===C.me; el.innerHTML=ehEu?saldoBoxHtml(dt.slice(0,7),parseNum((document.getElementById('f-valor')||{}).value),g('tipo')==='aporte','Não muda o seu saldo'):''; };
     ['f-valor','f-data'].forEach(i=>{ const e=document.getElementById(i); if(e){ e.addEventListener('input',upc); e.addEventListener('change',upc); } });
@@ -2867,7 +2937,7 @@ document.addEventListener('click', e=>{
   const mv = t.closest('[data-menu-mv]'); if(mv){ lerMenuInputs(); const i=+mv.dataset.i, j=i+(+mv.dataset.menuMv); if(j>=0&&j<MENU_TMP.length){ [MENU_TMP[i],MENU_TMP[j]]=[MENU_TMP[j],MENU_TMP[i]]; menuModal(); } return; }
   const dro = t.closest('[data-del-role]'); if(dro){ saveFundo({...C.fundo,lancamentos:(C.fundo.lancamentos||[]).filter(l=>l.id!==dro.dataset.delRole)}); return; }
   if(t.closest('[data-roleall]')){ UI.roleAll=true; render(); return; }
-  const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); const mvd=q.movimentos.find(m=>m.id===dmc.dataset.delMovCasal); if(mvd&&mvd.gasto&&mvd.quem===C.me) tirarDoGasto(mvd.gasto); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
+  const dmc = t.closest('[data-del-mov-casal]'); if(dmc){ const id=dmc.dataset.id; const q=JSON.parse(JSON.stringify(C.cpotes[id])); const mvd=q.movimentos.find(m=>m.id===dmc.dataset.delMovCasal); if(mvd&&mvd.gasto&&mvd.quem===C.me) tirarDoGasto(mvd.gasto); if(mvd&&mvd.quem===C.me) tirarEspelho(mvd); q.movimentos=q.movimentos.filter(m=>m.id!==dmc.dataset.delMovCasal); saveCasal(id,q); openCxCasal(id); return; }
   const mes1=t.closest('[data-meli-escolher]'); if(mes1){ S.config={...S.config,meliMaisId:mes1.dataset.meliEscolher}; save('config','geral',S.config); return; }
   if(t.closest('[data-meli-all]')){ UI.meliAll=true; render(); return; }
   const ca=t.closest('[data-cart-ano]'); if(ca){ if(ca.dataset.cartAno){ UI.cartAno=ca.dataset.cartAno; render(); } return; }
@@ -2918,6 +2988,7 @@ document.addEventListener('click', e=>{
     if(pg[F]) delete pg[F][card]; S.cinfo={...S.cinfo,pagas:pg,parcelas:parcs}; save('cartaoinfo','geral',S.cinfo); toast('Pagamento desfeito'); return; }
   if(t.closest('[data-fipe-atualizar]')){ atualizarFipes(true); return; }
   const bd=t.closest('[data-bem-del]'); if(bd){ salvarBens(bensList().filter(x=>x.id!==bd.dataset.bemDel)); closeModal(); toast('Bem apagado'); return; }
+  const pab=t.closest('[data-prov-aba]'); if(pab){ UI.provAba=pab.dataset.provAba; UI.provAll=false; render(); return; }
   const eab=t.closest('[data-empr-aba]'); if(eab){ UI.emprAba=eab.dataset.emprAba; render(); return; }
   const ep1=t.closest('[data-empr-pagar]'); if(ep1){ if(readonlyView()) return save(); emprPagar(ep1.dataset.emprPagar); return; }
   const ep2=t.closest('[data-empr-desf]'); if(ep2){ if(readonlyView()) return save(); emprDesfazer(ep2.dataset.emprDesf); return; }
@@ -2954,7 +3025,7 @@ document.addEventListener('click', e=>{
   const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
   const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); const del=c.compras.find(x=>x.id===dc.dataset.delCompra); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if(del&&del.guardado) tirarDaCaixinha(del); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
   const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
-  const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); const mvd=p.movimentos.find(m=>m.id===dm.dataset.delMov); if(mvd&&mvd.gasto) tirarDoGasto(mvd.gasto); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
+  const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); const mvd=p.movimentos.find(m=>m.id===dm.dataset.delMov); if(mvd&&mvd.gasto) tirarDoGasto(mvd.gasto); tirarEspelho(mvd); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
   const cs = t.closest('[data-cb-status]'); if(cs){ const nx={pendente:'confirmado',confirmado:'resgatado',resgatado:'pendente'}; const m={...S.meliuz,itens:S.meliuz.itens.map(x=>x.id===cs.dataset.cbStatus?{...x,status:nx[x.status]}:x)}; save('meliuz','registro',m); return; }
   const dcb = t.closest('[data-del-cb]'); if(dcb){ save('meliuz','registro',{...S.meliuz,itens:S.meliuz.itens.filter(x=>x.id!==dcb.dataset.delCb)}); return; }
 });
