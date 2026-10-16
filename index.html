@@ -356,6 +356,11 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
 .renda-f.vazio{background:transparent;border:1px dashed var(--line-2)}
 .renda-f.vazio .v{color:var(--muted);font-weight:500}
 @media (max-width:760px){ .renda-fontes{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px} .renda-f{padding:8px 8px} .renda-f .n{font-size:.68rem} .renda-f .v{font-size:.92rem} .renda-f .p{font-size:.66rem} }
+.saldo-box{display:flex;justify-content:space-between;align-items:center;gap:12px;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 55%,#000));color:#fff;border-radius:16px;padding:12px 16px;margin:2px 0 12px;box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 30%,transparent)}
+.saldo-box .sb-l{white-space:nowrap;font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.78);font-weight:600}
+.saldo-box .sb-v{font-family:var(--display);font-weight:700;font-size:1.35rem;color:#fff}
+.saldo-box .sb-v.neg{color:#ffd0d0}
+.saldo-box .sb-n{font-size:.78rem;color:rgba(255,255,255,.85);text-align:right;max-width:55%}
 .card-pill .cp-nome{display:inline-block;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .card-pill{flex:none;border:0;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 8px;font-size:.74rem;font-weight:700;white-space:nowrap;cursor:pointer}
 .card-pill:hover{filter:brightness(.96)}
@@ -1831,13 +1836,18 @@ const ACT = {
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
       {name:'obs',label:'Observação (opcional)'},
       {name:'lancar',label:'Descontar do saldo (entra em "Poupança e investimentos" nos gastos do mês, só quando guardar)',type:'check',value:!(d.pote&&S.potes[d.pote]&&S.potes[d.pote].tipo==='cartao')},
-    ], onSubmit:v=>{
+    ], extra:'<div id="mv-saldo"></div>', onSubmit:v=>{
       const val=parseNum(v.valor); if(!val) return 'Informe um valor';
       const p=JSON.parse(JSON.stringify(S.potes[v.pote])); p.movimentos=p.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,obs:v.obs.trim()};
       if(v.tipo==='aporte' && v.lancar) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
       p.movimentos.push(mv); save('potes',v.pote,p);
       toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado':'Rendimento lançado');
     }});
+    const up=()=>{ const el=document.getElementById('mv-saldo'); if(!el) return; const tp=(document.querySelector('#frm .seg[data-name="tipo"]')||{}).dataset?.value, ln=document.getElementById('f-lancar'), dt=(document.getElementById('f-data')||{}).value||todayISO();
+      el.innerHTML=saldoBoxHtml(dt.slice(0,7),parseNum((document.getElementById('f-valor')||{}).value),tp==='aporte'&&ln&&ln.checked,tp==='rendimento'?'Rendimento fica na caixinha, não muda o saldo':tp==='resgate'?'O resgate fica registrado na caixinha':'Não desconta do saldo'); };
+    ['f-valor','f-data','f-lancar'].forEach(i=>{ const e=document.getElementById(i); if(e){ e.addEventListener('input',up); e.addEventListener('change',up); } });
+    const sg=document.querySelector('#frm .seg[data-name="tipo"]'); if(sg) sg.addEventListener('click',()=>setTimeout(up,0));
+    { const b=document.getElementById('mv-saldo'), h=document.querySelector('#frm h3'); if(b&&h) h.after(b); } up();
   },
   'atualizar-saldo'(d){
     const p=S.potes[d.pote]; const s=potSaldo(p);
@@ -2333,10 +2343,15 @@ Object.assign(ACT, {
       {name:'quem',label:'Quem',type:'seg',options:[[C.me,meuNome()],[C.parc,nomeParceiro()]],value:C.me},
       {name:'tipo',label:'Tipo',type:'seg',options:[['aporte','Guardar'],['resgate','Retirar'],['rendimento','Rendimento']],value:'aporte'},
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
-      {name:'obs',label:'Observação (opcional)'}],
+      {name:'obs',label:'Observação (opcional)'}], extra:'<div id="mvc-saldo"></div>',
     onSubmit:v=>{ const val=parseNum(v.valor); if(!val) return 'Informe um valor'; const q=JSON.parse(JSON.stringify(p)); q.movimentos=q.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,quem:v.quem,obs:v.obs.trim()};
       if(v.tipo==='aporte'&&v.quem===C.me) mv.gasto=lancarNoGasto('poupanca',p.nome+' (casal)',r2(val),v.data,'Guardado em '+p.nome+' (casal)');
       q.movimentos.push(mv); saveCasal(d.id,q); setTimeout(()=>openCxCasal(d.id),30); toast('Salvo na caixinha do casal'+(mv.gasto?' · '+fmt(val)+' descontado do seu saldo':'')); }});
+    const upc=()=>{ const el=document.getElementById('mvc-saldo'); if(!el) return; const g=n=>(document.querySelector('#frm .seg[data-name="'+n+'"]')||{}).dataset?.value; const dt=(document.getElementById('f-data')||{}).value||todayISO();
+      const ehEu=g('quem')===C.me; el.innerHTML=ehEu?saldoBoxHtml(dt.slice(0,7),parseNum((document.getElementById('f-valor')||{}).value),g('tipo')==='aporte','Não muda o seu saldo'):''; };
+    ['f-valor','f-data'].forEach(i=>{ const e=document.getElementById(i); if(e){ e.addEventListener('input',upc); e.addEventListener('change',upc); } });
+    document.querySelectorAll('#frm .seg').forEach(sg=>sg.addEventListener('click',()=>setTimeout(upc,0)));
+    { const b=document.getElementById('mvc-saldo'), h=document.querySelector('#frm h3'); if(b&&h) h.after(b); } upc();
   },
 });
 function cxCasalForm(id){
@@ -2712,6 +2727,16 @@ function gNota(){
   const c=G.forma.slice(5), fm=faturaMes(c,G.data||todayISO());
   return `Vai para a fatura de <b>${MESES[+fm.slice(5)-1].toLowerCase()}</b> do ${c==='MP'?'Mercado Pago':esc(c)}${G.parcela?` (1ª de ${G.parcela.toLowerCase()})`:''}.${G.guardaCompra?' O valor entra na <b>caixinha do cartão</b> e em Gastos do mês.':' Não desconta do saldo em Gastos do mês: aparece em Cartão de crédito › Compras do mês, por categoria.'}`;
 }
+
+/* ===== saldo em conta (como num banco): renda recebida − gastos do mês ===== */
+function saldoConta(mk){ return r2(orcTotals(S.orc[mk]).saldo||0); }
+function saldoBoxHtml(mk,val,desconta,nota){
+  const sd=saldoConta(mk), v=r2(+val||0), dep=r2(sd-(desconta?v:0));
+  return `<div class="saldo-box"><div><div class="sb-l">🏦 Saldo em conta</div><div class="sb-v ${sd<0?'neg':''}">${fmt(sd)}</div></div>
+    ${v?(desconta?`<div style="text-align:right"><div class="sb-l">Vai ficar</div><div class="sb-v ${dep<0?'neg':''}">${fmt(dep)}</div></div>`:`<div class="sb-n">${esc(nota||'Não muda o saldo')}</div>`):''}</div>`;
+}
+function efeitoGasto(){ const card=G.forma.startsWith('card:'); if(!card) return [true,'']; if(G.rec) return G.guardado&&G.guardarAgora?[true,'']:[false,'Vai para o cartão, não muda o saldo agora']; return G.guardaCompra?[true,'']:[false,'Vai para a fatura do cartão, não muda o saldo agora']; }
+function atualizarSaldoG(){ const el=document.getElementById('g-saldo'); if(!el) return; const [d,n]=efeitoGasto(); el.innerHTML=saldoBoxHtml((G.data||todayISO()).slice(0,7),parseNum(G.valor),d,n); }
 function renderGasto(first){
   if(!first) lerG();
   const cards=S.config.cartoes||['Nubank'];
@@ -2721,6 +2746,7 @@ function renderGasto(first){
   const ehCard=G.forma.startsWith('card:');
   const val=parseNum(G.valor);
   modal(`<h3>${G.rec?'Conta recorrente':'Lançar gasto'}</h3>
+    <div id="g-saldo"></div>
     <div class="g-valor"><span>R$</span><input id="g-valor" inputmode="decimal" placeholder="0,00" autocomplete="off" value="${esc(G.valor)}" aria-label="Valor"></div>
     <input id="g-desc" class="g-desc" placeholder="O que foi? (opcional: almoço, uber, farmácia…)" autocomplete="off" value="${esc(G.desc)}" aria-label="O que foi">
     <div class="g-lbl">Categoria</div>
@@ -2738,14 +2764,15 @@ function renderGasto(first){
   const root=document.getElementById('modal-root');
   const vEl=document.getElementById('g-valor'), dEl=document.getElementById('g-desc');
   if(first) setTimeout(()=>vEl.focus(),30);
-  vEl.addEventListener('input',()=>{ G.valor=vEl.value; const n=parseNum(vEl.value); document.getElementById('g-salvar').textContent=n?'Salvar '+fmt(n):'Salvar'; });
+  atualizarSaldoG();
+  vEl.addEventListener('input',()=>{ G.valor=vEl.value; const n=parseNum(vEl.value); document.getElementById('g-salvar').textContent=n?'Salvar '+fmt(n):'Salvar'; atualizarSaldoG(); });
   vEl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); dEl.focus(); } });
   dEl.addEventListener('input',()=>{ G.desc=dEl.value; if(G.mexeuCat) return; const sg=sugerirCat(dEl.value); const [k,n]=sg.split('|'); if(!dEl.value.trim()) return;
     G.cat=k; G.item=n; root.querySelectorAll('[data-gcat]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.gcat===k)); if(!G.trocar) document.getElementById('g-itemline').innerHTML=`Soma em <b>${esc(CAT[k].n)} › ${esc(n)}</b> <button type="button" class="linkbtn" data-gtrocar>trocar item</button>`; });
   dEl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); salvarGasto(); } });
-  const dt=document.getElementById('g-data'); dt.addEventListener('change',()=>{ G.data=dt.value||todayISO(); document.getElementById('g-nota').innerHTML=gNota(); });
+  const dt=document.getElementById('g-data'); dt.addEventListener('change',()=>{ G.data=dt.value||todayISO(); document.getElementById('g-nota').innerHTML=gNota(); atualizarSaldoG(); });
   document.getElementById('g-rec').addEventListener('change',e=>{ lerG(); G.rec=e.target.checked; if(G.rec) G.parcela=''; renderGasto(); });
-  const ag=document.getElementById('g-agora'); if(ag) ag.addEventListener('change',()=>{ G.guardarAgora=ag.checked; });
+  const ag=document.getElementById('g-agora'); if(ag) ag.addEventListener('change',()=>{ G.guardarAgora=ag.checked; atualizarSaldoG(); });
   root.querySelector('.sheet').addEventListener('click',e=>{
     const c=e.target.closest('[data-gcat]'); if(c){ lerG(); G.cat=c.dataset.gcat; G.item=itemPadrao(G.cat); G.mexeuCat=true; G.trocar=false; renderGasto(); return; }
     const f=e.target.closest('[data-gforma]'); if(f){ lerG(); G.forma=f.dataset.gforma; if(!G.forma.startsWith('card:')) G.parcela=''; renderGasto(); return; }
