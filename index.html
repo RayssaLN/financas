@@ -1331,7 +1331,7 @@ function rendFontes(){
   // devolve {mes: {fonte: valor}} e a lista de fontes
   const out={}; const add=(m,f,v)=>{ if(!v) return; (out[m]=out[m]||{}); out[m][f]=(out[m][f]||0)+v; };
   const pv=S.prov.itens||[];
-  pv.forEach(x=>add(x.data.slice(0,7), x.classe==='Exterior'?'Proventos exterior':'Proventos Brasil', +x.valor||0));
+  pv.forEach(x=>add(x.data.slice(0,7), provEx(x)?'Proventos exterior':'Proventos Brasil', +x.valor||0));
   Object.entries(S.prov.mensal||{}).forEach(([m,o])=>{ add(m,'Proventos Brasil',+o.Brasil||0); add(m,'Proventos exterior',+o.Exterior||0); });
   Object.entries(S.prov.anos||{}).forEach(([y,v])=>{ if(!Object.keys(out).some(m=>m.startsWith(y))) add(y+'-12','Proventos Brasil',+v||0); });
   potesList().forEach(p=>{ const f = p.reserva?'Reserva de emergência' : p.tipo==='cartao'?'Caixinha do cartão' : p.tipo==='caixinha'?'Outras caixinhas':'Investimentos';
@@ -1339,9 +1339,10 @@ function rendFontes(){
   return out;
 }
 const FONTES=[['Reserva de emergência','var(--accent)'],['Caixinha do cartão','var(--c7)'],['Outras caixinhas','var(--c3)'],['Investimentos','var(--c4)'],['Proventos Brasil','var(--c1)'],['Proventos exterior','var(--c5)']];
+const provEx=x=>x.classe==='Exterior'||EXT_PADRAO.includes((x.ativo||'').toUpperCase())||(!!x.ativo&&!/\d$/.test(x.ativo.trim()));
 function contaExterior(){ return potesList().find(p=>p.tipo==='investimento'&&p.classe==='Exterior'); }
 const EXT_PADRAO=['NVDA','AAPL','MSFT','TFLO','VT'];
-const ehExterior=a=>{ a=(a||'').toUpperCase().trim(); if(!a) return false; if(EXT_PADRAO.includes(a)) return true; const prev=(S.prov.itens||[]).find(x=>x.ativo===a); if(prev) return prev.classe==='Exterior'; return !/\d$/.test(a); };
+const ehExterior=a=>{ a=(a||'').toUpperCase().trim(); if(!a) return false; if(EXT_PADRAO.includes(a)) return true; const prev=(S.prov.itens||[]).find(x=>x.ativo===a); if(prev) return provEx(prev); return !/\d$/.test(a); };
 function provForm(pais0){
   let pais=pais0, mexeuPais=false, mexeuImp=false;
   const cBR=contaCorretora(), cEX=contaExterior(), cot0=S.config.ultimaCotacao||'';
@@ -1412,9 +1413,9 @@ function vRend(){
     </tbody><tfoot><tr><td>Total</td>${fAll.map(([f])=>`<td class="r">${fmt(sum(anos,y=>yv(y,f)))}</td>`).join('')}<td class="r">${fmt(totalGeral)}</td></tr></tfoot></table></div></div>`;
   // proventos do ano, separados em Brasil e exterior
   const aba=UI.provAba==='ex'?'ex':'br', exA=aba==='ex';
-  const todos=(S.prov.itens||[]).filter(x=>(x.classe==='Exterior')===exA);
+  const todos=(S.prov.itens||[]).filter(x=>provEx(x)===exA);
   const pv=todos.filter(x=>x.data.startsWith(ano));
-  const nBR=(S.prov.itens||[]).filter(x=>x.classe!=='Exterior'&&x.data.startsWith(ano)).length, nEX=(S.prov.itens||[]).filter(x=>x.classe==='Exterior'&&x.data.startsWith(ano)).length;
+  const nBR=(S.prov.itens||[]).filter(x=>!provEx(x)&&x.data.startsWith(ano)).length, nEX=(S.prov.itens||[]).filter(x=>provEx(x)&&x.data.startsWith(ano)).length;
   const usd=v=>'US$ '+r2(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
   h += `<div class="seg section" style="max-width:420px">${[['br','🇧🇷 Brasil',nBR],['ex','🌎 Exterior',nEX]].map(([k,t,n])=>`<button type="button" data-prov-aba="${k}" aria-pressed="${aba===k}">${t} <span class="muted" style="font-weight:500">${n}</span></button>`).join('')}</div>`;
   if(exA&&pv.length){ const bru=sum(pv,x=>+x.usd||0), imp=sum(pv,x=>+x.impostoUsd||0);
@@ -2151,6 +2152,12 @@ function tirarEspelho(mov){
   if(mov.espelhoCasal&&C.cpotes[mov.espelhoCasal.cx]){ const q=JSON.parse(JSON.stringify(C.cpotes[mov.espelhoCasal.cx])); const o=(q.movimentos||[]).find(m=>m.id===mov.espelhoCasal.mov); if(o&&o.gasto&&o.quem===C.me) tirarDoGasto(o.gasto); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==mov.espelhoCasal.mov); saveCasal(mov.espelhoCasal.cx,q); }
   if(mov.espelho&&S.potes[mov.espelho.pote]){ const q=JSON.parse(JSON.stringify(S.potes[mov.espelho.pote])); const o=(q.movimentos||[]).find(m=>m.id===mov.espelho.mov); if(o&&o.gasto) tirarDoGasto(o.gasto); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==mov.espelho.mov); save('potes',mov.espelho.pote,q); }
 }
+function sincronizarComCasal(q,cid,poteId){
+  // copia o histórico da caixinha pessoal para a do casal, no meu nome; o que eu tinha lançado à mão lá sai, para não contar duas vezes
+  const c=JSON.parse(JSON.stringify(C.cpotes[cid])); c.movimentos=(c.movimentos||[]).filter(m=>m.quem!==C.me);
+  let n=0; (q.movimentos||[]).forEach(m=>{ if(m.tipo==='ajuste') return; const id=uid('m'); c.movimentos.push({id,data:m.data,tipo:m.tipo,valor:m.valor,quem:C.me,obs:m.obs||'',espelho:{pote:poteId,mov:m.id}}); m.espelhoCasal={cx:cid,mov:id}; n++; });
+  saveCasal(cid,c); return n;
+}
 function potForm(id, tipo, reserva){
   const p = id? S.potes[id] : {nome:'',tipo,classe:tipo==='caixinha'?'Renda fixa':'Renda fixa',meta:0,cor:POT_COLORS[Object.keys(S.potes).length%POT_COLORS.length],reserva:!!reserva,instituicao:''};
   const t = p.tipo;
@@ -2161,7 +2168,8 @@ function potForm(id, tipo, reserva){
     {name:'mensalidade',label:'Mensalidade para manter (opcional, ex.: Meli+). Ativa o "Vale a pena?"',type:'money',value:p.mensalidade?r2(p.mensalidade).toLocaleString('pt-BR',{minimumFractionDigits:2}):''},
     {name:'cor',label:'Cor',type:'select',options:POT_COLORS.map((c,i)=>[c,['Verde','Azul','Dourado','Roxo','Rosa','Laranja','Menta','Vermelho'][i]]),value:p.cor},
     {name:'saldo',label: id?'':'Saldo que já tem hoje (opcional)',type:'money'},
-    ...(t==='caixinha'&&C.on&&Object.keys(C.cpotes).length?[{name:'vinculo',label:'Ligar a uma caixinha do casal (o que você guardar, resgatar ou render aqui entra lá também, e vice-versa)',type:'select',options:[['','Não ligar'],...cxCasalList().map(c=>[c.id,c.nome])],value:p.vinculoCasal||''}]:[]),
+    ...(t==='caixinha'&&C.on&&Object.keys(C.cpotes).length?[{name:'vinculo',label:'Ligar a uma caixinha do casal (o que você guardar, resgatar ou render aqui entra lá também, e vice-versa)',type:'select',options:[['','Não ligar'],...cxCasalList().map(c=>[c.id,c.nome])],value:p.vinculoCasal||''},
+      {name:'syncHist',label:'Copiar tudo o que já tem nesta caixinha para a do casal, no seu nome (troca o que estava lançado no seu nome lá)',type:'check',value:!!id&&!(p.movimentos||[]).some(m=>m.espelhoCasal)}]:[]),
   ].filter(f=>!(id&&f.name==='saldo')),
   extra: id?`<div class="confirm" id="delzone"><span style="flex:1">Apagar ${esc(p.nome)} e todas as movimentações?</span><button type="button" class="btn sm danger" data-act="apagar-pote" data-pote="${id}">Apagar</button></div>`:'',
   onSubmit:v=>{
@@ -2170,7 +2178,9 @@ function potForm(id, tipo, reserva){
     q.nome=v.nome.trim(); q.meta=parseNum(v.meta); q.mensalidade=parseNum(v.mensalidade); q.classe=v.classe; q.instituicao=v.instituicao.trim(); q.cor=v.cor;
     if(!id && parseNum(v.saldo)) q.movimentos.push({id:uid('m'),data:todayISO(),tipo:'aporte',valor:parseNum(v.saldo),obs:'Saldo inicial'});
     const nid = id || (q.nome.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30)||'pote')+'-'+Math.random().toString(36).slice(2,6);
-    save('potes',nid,q); toast(id?'Salvo':(t==='caixinha'?'Caixinha criada':'Investimento criado'));
+    let syncMsg='';
+    if(q.vinculoCasal&&v.syncHist&&C.cpotes[q.vinculoCasal]){ const n=sincronizarComCasal(q,q.vinculoCasal,nid); syncMsg=' · '+n+' movimentações copiadas para o casal'; }
+    save('potes',nid,q); toast((id?'Salvo':(t==='caixinha'?'Caixinha criada':'Investimento criado'))+syncMsg);
   }});
 }
 
