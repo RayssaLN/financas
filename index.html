@@ -538,6 +538,7 @@ const I = {
   more:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  pencil:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
   left:'<path d="M15 6l-6 6 6 6"/>', right:'<path d="M9 6l6 6-6 6"/>'
 };
 const svg = (k, extra='') => `<svg viewBox="0 0 24 24" ${extra} aria-hidden="true">${I[k]}</svg>`;
@@ -1343,8 +1344,17 @@ const provEx=x=>x.classe==='Exterior'||EXT_PADRAO.includes((x.ativo||'').toUpper
 function contaExterior(){ return potesList().find(p=>p.tipo==='investimento'&&p.classe==='Exterior'); }
 const EXT_PADRAO=['NVDA','AAPL','MSFT','TFLO','VT'];
 const ehExterior=a=>{ a=(a||'').toUpperCase().trim(); if(!a) return false; if(EXT_PADRAO.includes(a)) return true; const prev=(S.prov.itens||[]).find(x=>x.ativo===a); if(prev) return provEx(prev); return !/\d$/.test(a); };
+async function cotacaoNaData(iso){
+  // PTAX do Banco Central: última cotação de fechamento até a data (fim de semana e feriado usam o último dia útil)
+  const d=new Date(iso+'T12:00:00'); if(isNaN(d)) return null; const ini=new Date(d); ini.setDate(ini.getDate()-7);
+  const f=x=>String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')+'-'+x.getFullYear();
+  const url="https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@dataInicial='"+f(ini)+"'&@dataFinalCotacao='"+f(d)+"'&$format=json";
+  try{ const r=await fetch(url); if(!r.ok) return null; const j=await r.json(); const L=j.value||[]; if(!L.length) return null;
+    const fe=L.filter(x=>x.tipoBoletim==='Fechamento'); const pool=(fe.length?fe:L).slice().sort((a,b)=>String(a.dataHoraCotacao).localeCompare(String(b.dataHoraCotacao)));
+    return +pool[pool.length-1].cotacaoVenda||null; }catch(e){ return null; }
+}
 function provForm(pais0){
-  let pais=pais0, mexeuPais=false, mexeuImp=false;
+  let pais=pais0, mexeuPais=false, mexeuImp=false, mexeuCot=false, autoCot=false;
   const cBR=contaCorretora(), cEX=contaExterior(), cot0=S.config.ultimaCotacao||'';
   const br=v=>v?r2(v).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
   const draw=()=>{ const ex=pais==='ex', c=ex?cEX:cBR;
@@ -1360,7 +1370,7 @@ function provForm(pais0){
         document.getElementById('pv-res').innerHTML=`<div><div class="sb-l">Líquido</div><div class="sb-v">US$ ${br(liq)||'0,00'}</div></div><div style="text-align:right"><div class="sb-l">Em reais</div><div class="sb-v">${cot?fmt(liq*cot):'informe a cotação'}</div></div>`; };
       document.getElementById('pv-bruto').addEventListener('input',()=>{ if(!mexeuImp){ const bru=parseNum(document.getElementById('pv-bruto').value); document.getElementById('pv-imp').value=bru?br(bru*0.3):''; } calc(); });
       document.getElementById('pv-imp').addEventListener('input',()=>{ mexeuImp=true; calc(); });
-      document.getElementById('pv-cot').addEventListener('input',calc); calc(); }
+      document.getElementById('pv-cot').addEventListener('input',e=>{ if(!autoCot) mexeuCot=true; calc(); }); calc(); }
   };
   modal(`<form id="pvf"><h3>Novo provento</h3>
     <div class="field"><label>Onde</label><div class="seg" id="pv-pais"><button type="button" data-v="br" aria-pressed="${pais==='br'}">Brasil</button><button type="button" data-v="ex" aria-pressed="${pais==='ex'}">Exterior</button></div></div>
@@ -1369,7 +1379,14 @@ function provForm(pais0){
     <p class="note" id="pv-nota" style="margin-top:2px">${pais==='ex'?'No exterior, os EUA costumam reter 30% do provento. O imposto já vem preenchido com 30%; ajuste se o seu extrato mostrar outro valor.':''}</p>
     <div class="foot"><button type="button" class="btn ghost" data-close>Cancelar</button><button class="btn pri" type="submit">Salvar</button></div></form>`);
   draw();
-  const setPais=v=>{ pais=v; draw(); document.getElementById('pv-nota').textContent=pais==='ex'?'No exterior, os EUA costumam reter 30% do provento. O imposto já vem preenchido com 30%; ajuste se o seu extrato mostrar outro valor.':''; };
+  const buscaCot=async()=>{ if(pais!=='ex'||mexeuCot) return; const el=document.getElementById('pv-cot'); if(!el) return; const dt=(document.getElementById('pv-data')||{}).value||todayISO();
+    el.placeholder='buscando cotação…'; const c=await cotacaoNaData(dt);
+    if(pais!=='ex'||mexeuCot||document.getElementById('pv-cot')!==el) return;
+    if(c){ autoCot=true; el.value=br(c); el.dispatchEvent(new Event('input')); autoCot=false; el.placeholder='Ex.: 5,40'; }
+    else { el.placeholder='não achei a cotação, informe'; } };
+  const setPais=v=>{ pais=v; draw(); document.getElementById('pv-nota').textContent=pais==='ex'?'No exterior, os EUA costumam reter 30% do provento. O imposto já vem preenchido com 30%; ajuste se o seu extrato mostrar outro valor.':''; buscaCot(); };
+  document.getElementById('pv-data').addEventListener('change',buscaCot);
+  if(pais==='ex') buscaCot();
   document.getElementById('pv-pais').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; mexeuPais=true; setPais(b.dataset.v); });
   document.getElementById('pv-ativo').addEventListener('input',e=>{ if(mexeuPais) return; const ex=ehExterior(e.target.value)?'ex':'br'; if(ex!==pais&&e.target.value.trim().length>=2) setPais(ex); });
   setTimeout(()=>document.getElementById('pv-ativo').focus(),30);
@@ -1387,6 +1404,26 @@ function provForm(pais0){
     if(nc&&nc.checked&&conta){ const q=JSON.parse(JSON.stringify(S.potes[conta.id])); q.movimentos=q.movimentos||[]; const mid=uid('m'); q.movimentos.push({id:mid,data,tipo:'aporte',valor:item.valor,obs:'Provento '+a+' ('+tipo.toLowerCase()+')'}); save('potes',conta.id,q); item.conta={pote:conta.id,mov:mid}; }
     save('proventos','lista',{...S.prov,itens:[...(S.prov.itens||[]),item]}); closeModal(); UI.provAba=pais;
     toast('Provento lançado · '+fmt(item.valor)+(item.conta?' na '+conta.nome:'')); });
+}
+function provEditForm(id){
+  const pv=(S.prov.itens||[]).find(x=>x.id===id); if(!pv) return;
+  const ex=pv.classe==='Exterior'||pv.usd!=null;
+  const tipos=ex?['Dividendos','Distribuição de ETF','Juros']:['Rendimentos','Dividendos','Juros sobre capital','Frações'];
+  const br=v=>(v!=null&&v!=='')?r2(+v).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  const fields=[{name:'ativo',label:'Ativo',value:pv.ativo},
+    {type:'row',items:[{name:'data',label:'Data',type:'date',value:pv.data},{name:'tipo',label:'Tipo',type:'select',options:[...new Set([...tipos,pv.tipo].filter(Boolean))].map(t=>[t,t]),value:pv.tipo}]}];
+  if(ex) fields.push({type:'row',items:[{name:'bruto',label:'Valor bruto (US$)',type:'money',req:true,value:br(pv.usd)},{name:'imp',label:'Imposto retido (US$)',type:'money',value:br(pv.impostoUsd||0)}]},{name:'cot',label:'Cotação do dólar (R$)',type:'money',req:true,value:br(pv.cotacao)});
+  else fields.push({name:'valor',label:'Valor recebido (R$)',type:'money',req:true,value:br(pv.valor)});
+  form({title:'Editar provento', fields, onSubmit:v=>{
+    const a=(v.ativo||'').trim().toUpperCase(); if(!a) return 'Informe o ativo';
+    const upd={ativo:a,data:v.data||pv.data,tipo:v.tipo||pv.tipo};
+    if(ex){ const bru=r2(parseNum(v.bruto)), imp=r2(parseNum(v.imp)), cot=parseNum(v.cot); if(!bru) return 'Informe o valor bruto'; if(!cot) return 'Informe a cotação do dólar';
+      Object.assign(upd,{usd:bru,impostoUsd:imp,cotacao:cot,valor:r2((bru-imp)*cot),liquido:true}); }
+    else { const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; upd.valor=val; }
+    if(pv.conta&&S.potes[pv.conta.pote]){ const q=JSON.parse(JSON.stringify(S.potes[pv.conta.pote])); const m=(q.movimentos||[]).find(x=>x.id===pv.conta.mov); if(m){ m.valor=upd.valor; m.data=upd.data; m.obs='Provento '+a+' ('+String(upd.tipo).toLowerCase()+')'; save('potes',pv.conta.pote,q); } }
+    save('proventos','lista',{...S.prov,itens:(S.prov.itens||[]).map(x=>x.id===id?{...x,...upd}:x)});
+    toast('Provento atualizado');
+  }});
 }
 function vRend(){
   const F=rendFontes(); const anos=[...new Set(Object.keys(F).map(m=>m.slice(0,4)))].sort();
@@ -1424,7 +1461,7 @@ function vRend(){
     const top=Object.entries(byA).sort((a,b)=>b[1].v-a[1].v);
     const rec=[...todos].sort((a,b)=>b.data.localeCompare(a.data));
     h += `<div class="grid g2 section" style="margin-top:12px"><div class="card"><div class="card-h"><div><h2>Quem mais pagou em ${ano}</h2><p>${exA?'Proventos do exterior':'Proventos do Brasil'} por ativo</p></div></div>${top.length?`<div class="rows">${top.slice(0,10).map(([k,b])=>`<div class="row" style="padding:7px 0"><i class="dot" style="background:${exA?'var(--c5)':'var(--c1)'}"></i><div class="grow"><div class="t">${esc(k)}</div><div class="s">${b.n} pagamentos</div></div><span class="v pos">${fmt(b.v)}</span></div>`).join('')}</div>`:`<p class="muted">Nenhum provento ${exA?'do exterior':'do Brasil'} em ${ano}.</p>`}</div>
-      <div class="card"><div class="card-h"><div><h2>Proventos recebidos</h2><p>${rec.length} lançamentos</p></div><button class="btn sm pri" data-act="novo-provento">${svg('plus')}Provento</button></div>${rec.length?`<div class="rows">${rec.slice(0,UI.provAll?999:10).map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.ativo)}</div><div class="s">${esc(x.tipo)}${exA&&x.usd!=null?` · bruto ${usd(x.usd)}${+x.impostoUsd?` · <span class="neg">imposto ${usd(x.impostoUsd)}</span>`:''}`:''}</div></div><span class="v pos">+${fmt(x.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-prov="${x.id}">${svg('trash')}</button></div>`).join('')}</div>${rec.length>10&&!UI.provAll?`<button class="btn sm ghost" style="margin-top:8px" data-provall>Ver todos</button>`:''}`:`<p class="muted">Nada lançado ainda. Toque em "Provento" para lançar.</p>`}</div></div>`; }
+      <div class="card"><div class="card-h"><div><h2>Proventos recebidos</h2><p>${rec.length} lançamentos</p></div><button class="btn sm pri" data-act="novo-provento">${svg('plus')}Provento</button></div>${rec.length?`<div class="rows">${rec.slice(0,UI.provAll?999:10).map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.ativo)}</div><div class="s">${esc(x.tipo)}${exA&&x.usd!=null?` · bruto ${usd(x.usd)}${+x.impostoUsd?` · <span class="neg">imposto ${usd(x.impostoUsd)}</span>`:''}`:''}</div></div><span class="v pos">+${fmt(x.valor)}</span><button class="iconbtn" aria-label="Editar" data-edit-prov="${x.id}">${svg('pencil')}</button><button class="iconbtn" aria-label="Apagar" data-del-prov="${x.id}">${svg('trash')}</button></div>`).join('')}</div>${rec.length>10&&!UI.provAll?`<button class="btn sm ghost" style="margin-top:8px" data-provall>Ver todos</button>`:''}`:`<p class="muted">Nada lançado ainda. Toque em "Provento" para lançar.</p>`}</div></div>`; }
   return h;
 }
 const CART_CLASSES = ['Renda fixa','Ações','FIIs','Cripto','Exterior'];
@@ -2976,6 +3013,7 @@ document.addEventListener('click', e=>{
   const dca = t.closest('[data-del-compra-ativo]'); if(dca){ const id=dca.dataset.pote; const x=JSON.parse(JSON.stringify(S.potes[id])); const c=x.compras[+dca.dataset.delCompraAtivo]; if(c&&c.conta) tirarMovConta(c.conta); x.compras.splice(+dca.dataset.delCompraAtivo,1); const mi=x.movimentos.findIndex(m=>m.data===c.data&&Math.abs(m.valor-c.valor)<0.005&&(m.tipo==='aporte'||m.tipo==='resgate')); if(mi>=0) x.movimentos.splice(mi,1); save('potes',id,x); openPote(id); return; }
   const dmz = t.closest('[data-del-mz]'); if(dmz){ save('meliuz','registro',{...S.meliuz,lancamentos:(S.meliuz.lancamentos||[]).filter(x=>x.id!==dmz.dataset.delMz)}); return; }
   if(t.closest('[data-mzall]')){ UI.mzAll=true; render(); return; }
+  const epv = t.closest('[data-edit-prov]'); if(epv){ provEditForm(epv.dataset.editProv); return; }
   const dpv = t.closest('[data-del-prov]'); if(dpv){ const pv=(S.prov.itens||[]).find(x=>x.id===dpv.dataset.delProv); if(pv&&pv.conta) tirarMovConta(pv.conta); save('proventos','lista',{...S.prov,itens:(S.prov.itens||[]).filter(x=>x.id!==dpv.dataset.delProv)}); return; }
   const dcr = t.closest('[data-del-credito]'); if(dcr){ save('cartaoinfo','geral',{...S.cinfo,creditos:(S.cinfo.creditos||[]).filter(x=>x.id!==dcr.dataset.delCredito)}); return; }
   const ra = t.closest('[data-rend-ano]'); if(ra){ UI.rendAno=ra.dataset.rendAno; render(); return; }
