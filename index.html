@@ -1893,20 +1893,21 @@ const ACT = {
       {name:'tipo',label:'Tipo',type:'seg',options:[['aporte','Guardar'],['resgate','Resgatar'],['rendimento','Rendimento']],value:d.tipo||'aporte'},
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
       {name:'obs',label:'Observação (opcional)'},
-      {name:'lancar',label:'Descontar do saldo (entra em "Poupança e investimentos" nos gastos do mês, só quando guardar)',type:'check',value:!(d.pote&&S.potes[d.pote]&&S.potes[d.pote].tipo==='cartao')},
-      {name:'devolver',label:'Se for resgate: devolver para o saldo em conta (entra como Transferência nas rendas do mês)',type:'check',value:true},
     ], extra:'<div id="mv-saldo"></div>', onSubmit:v=>{
       const val=parseNum(v.valor); if(!val) return 'Informe um valor';
       const p=JSON.parse(JSON.stringify(S.potes[v.pote])); p.movimentos=p.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,obs:v.obs.trim()};
-      if(v.tipo==='aporte' && v.lancar) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
+      const noCartao=p.tipo!=='cartao';
+      if(v.tipo==='aporte' && noCartao) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
       espelharNoCasal(v.pote,mv);
-      if(v.tipo==='resgate' && v.devolver && p.tipo!=='cartao') mv.receb=lancarRecebido('Transferência',val,v.data,'Resgate de '+p.nome);
+      if(v.tipo==='resgate' && noCartao) mv.receb=lancarRecebido('Transferência',val,v.data,'Resgate de '+p.nome);
       p.movimentos.push(mv); save('potes',v.pote,p);
-      toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado':'Rendimento lançado');
+      toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado · voltou ao saldo':'Rendimento lançado');
     }});
-    const up=()=>{ const el=document.getElementById('mv-saldo'); if(!el) return; const tp=(document.querySelector('#frm .seg[data-name="tipo"]')||{}).dataset?.value, ln=document.getElementById('f-lancar'), dt=(document.getElementById('f-data')||{}).value||todayISO();
-      el.innerHTML=saldoBoxHtml(dt.slice(0,7),parseNum((document.getElementById('f-valor')||{}).value),tp==='aporte'&&ln&&ln.checked,tp==='rendimento'?'Rendimento fica na caixinha, não muda o saldo':tp==='resgate'?'O resgate fica registrado na caixinha':'Não desconta do saldo'); };
-    ['f-valor','f-data','f-lancar'].forEach(i=>{ const e=document.getElementById(i); if(e){ e.addEventListener('input',up); e.addEventListener('change',up); } });
+    const up=()=>{ const el=document.getElementById('mv-saldo'); if(!el) return; const tp=(document.querySelector('#frm .seg[data-name="tipo"]')||{}).dataset?.value, pid=(document.getElementById('f-pote')||{}).value, pt=S.potes[pid], noCartao=!(pt&&pt.tipo==='cartao'), dt=(document.getElementById('f-data')||{}).value||todayISO(), val=parseNum((document.getElementById('f-valor')||{}).value);
+      if(tp==='aporte') el.innerHTML=saldoBoxHtml(dt.slice(0,7),val,noCartao,'Não desconta do saldo');
+      else if(tp==='resgate') el.innerHTML=saldoBoxHtml(dt.slice(0,7),-val,noCartao,'Não volta ao saldo');
+      else el.innerHTML=saldoBoxHtml(dt.slice(0,7),0,false,'Rendimento fica na caixinha, não muda o saldo'); };
+    ['f-valor','f-data','f-pote'].forEach(i=>{ const e=document.getElementById(i); if(e){ e.addEventListener('input',up); e.addEventListener('change',up); } });
     const sg=document.querySelector('#frm .seg[data-name="tipo"]'); if(sg) sg.addEventListener('click',()=>setTimeout(up,0));
     { const b=document.getElementById('mv-saldo'), h=document.querySelector('#frm h3'); if(b&&h) h.after(b); } up();
   },
