@@ -1,5 +1,122 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7b3f8c">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Finanças">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+#login{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg,#f5f3f7);font-family:"Figtree",system-ui,sans-serif}
+#login .box{max-width:360px;width:100%;text-align:center}
+#login h1{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:1.8rem;margin:18px 0 6px;color:var(--ink,#231a2b)}
+#login p{color:var(--ink-2,#554b5e);margin:0 0 24px}
+#login button{display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(0,0,0,.15);background:#fff;color:#222;border-radius:12px;padding:12px 20px;font:600 1rem "Figtree",system-ui,sans-serif;cursor:pointer}
+#login .err{color:#c2412f;font-size:.86rem;margin-top:14px}
+</style>
+<!-- Firebase (grátis no plano Spark) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+/* ===== Conexão com o Firebase: login com Google + dados em users/{seu id}/... ===== */
+(function(){
+  const cfgOk = window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !/COLE_AQUI/.test(window.FIREBASE_CONFIG.apiKey);
+  function loginScreen(msg){
+    let el=document.getElementById('login');
+    if(!el){ el=document.createElement('div'); el.id='login'; document.body.appendChild(el); }
+    el.innerHTML='<div class="box"><svg width="64" height="64" viewBox="0 0 40 40"><defs><linearGradient id="lgx" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b3f8c"/><stop offset="1" stop-color="#d8577e"/></linearGradient></defs><rect width="40" height="40" rx="12" fill="url(#lgx)"/><g fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.5v13M17 13.5l-9 7.5M11.6 18.3l5.8 8.2"/><path d="M21.5 26.5v-13h5a3.5 3.5 0 0 1 0 7h-5M26.2 20.5l4.6 6"/></g><path d="M33 4.8l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z" fill="#fff"/></svg>'
+      +'<h1>Finanças</h1><p>'+(cfgOk?'Entre com a sua conta Google para ver suas finanças.':'Falta configurar o Firebase: preencha o arquivo firebase-config.js (veja o LEIA-ME).')+'</p>'
+      +(cfgOk?'<button id="btn-google"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Entrar com Google</button>':'')
+      +(msg?'<div class="err">'+msg+'</div>':'')+'</div>';
+    const b=document.getElementById('btn-google');
+    if(b) b.onclick=()=>{ const p=new firebase.auth.GoogleAuthProvider(); firebase.auth().signInWithPopup(p).catch(e=>{ if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment') firebase.auth().signInWithRedirect(p); else loginScreen('Não consegui entrar: '+(e.message||e.code)); }); };
+  }
+  function adapterRoot(root){
+    const snap=s=>({id:s.id,exists:s.exists,data:()=>s.data()});
+    return {
+      collection:name=>{ const c=root.collection(name); return {
+        onSnapshot:(next,err)=>c.onSnapshot(q=>next({docs:q.docs.map(snap)}),err),
+        doc:id=>({ set:d=>c.doc(id).set(d), delete:()=>c.doc(id).delete() }) }; },
+      doc:path=>{ const [c,id]=path.split('/'); const r=root.collection(c).doc(id); return {
+        onSnapshot:(next,err)=>r.onSnapshot(s=>next(snap(s)),err), set:d=>r.set(d), delete:()=>r.delete() }; }
+    };
+  }
+  const fs=()=>firebase.firestore();
+  const userDoc=uid=>fs().collection('users').doc(uid);
+  let ME=null;
+  window.__getDb = () => new Promise(resolve=>{
+    if(!cfgOk){ loginScreen(); return; }
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    fs().enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    let started=false;
+    firebase.auth().onAuthStateChanged(async u=>{
+      if(!u){ if(started) location.reload(); else loginScreen(); return; }
+      const el=document.getElementById('login'); if(el) el.remove();
+      if(started) return; started=true;
+      ME={uid:u.uid, nome:(u.displayName||'').split(' ')[0]||'Eu'};
+      try{ const p=await userDoc(u.uid).collection('perfil').doc('info').get(); if(!p.exists||!p.data().nome) await userDoc(u.uid).collection('perfil').doc('info').set({nome:ME.nome},{merge:true}); else ME.nome=p.data().nome; }catch(e){}
+      resolve(adapterRoot(userDoc(u.uid)));
+    });
+  });
+  /* ---- casal: convite, vínculo e dados compartilhados ---- */
+  const ALF='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const novoCodigo=()=>Array.from(crypto.getRandomValues(new Uint32Array(10)),n=>ALF[n%ALF.length]).join('');
+  window.__couple = {
+    get me(){ return ME; },
+    dbFor: uid => adapterRoot(userDoc(uid)),
+    casalDb: cid => adapterRoot(fs().collection('casais').doc(cid)),
+    onCasal(cb){
+      let unCasal=null, cur=null;
+      userDoc(ME.uid).collection('perfil').doc('info').onSnapshot(s=>{
+        const cid=s.exists?s.data().casalId:null; if(s.exists&&s.data().nome) ME.nome=s.data().nome;
+        if(cid===cur) return; cur=cid; if(unCasal){ unCasal(); unCasal=null; }
+        if(!cid){ cb(null); return; }
+        unCasal=fs().collection('casais').doc(cid).onSnapshot(d=>{
+          const x=d.exists?d.data():null;
+          if(!x||!(x.membros||[]).includes(ME.uid)){ cb(null); return; }
+          cb({cid, membros:x.membros||[], nomes:x.nomes||{}});
+        }, ()=>cb(null));
+      }, ()=>cb(null));
+    },
+    async criar(nome){
+      const cid=novoCodigo();
+      await fs().collection('casais').doc(cid).set({membros:[ME.uid], nomes:{[ME.uid]:nome||ME.nome}, criadoEm:new Date().toISOString()});
+      await userDoc(ME.uid).collection('perfil').doc('info').set({casalId:cid, nome:nome||ME.nome},{merge:true});
+      return cid;
+    },
+    async entrar(cid,nome){
+      await fs().collection('casais').doc(cid).update({membros:firebase.firestore.FieldValue.arrayUnion(ME.uid), ['nomes.'+ME.uid]:nome||ME.nome});
+      await userDoc(ME.uid).collection('perfil').doc('info').set({casalId:cid, nome:nome||ME.nome},{merge:true});
+    },
+    async sair(cid){
+      try{ await fs().collection('casais').doc(cid).update({membros:firebase.firestore.FieldValue.arrayRemove(ME.uid), ['nomes.'+ME.uid]:firebase.firestore.FieldValue.delete()}); }catch(e){}
+      await userDoc(ME.uid).collection('perfil').doc('info').set({casalId:firebase.firestore.FieldValue.delete()},{merge:true});
+    }
+  };
+  window.__logout = () => firebase.auth().signOut();
+  window.__saveFile = async (name, txt) => {
+    const url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+    const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000); return {status:'saved'};
+  };
+})();
+</script>
 <title>Finanças</title>
+</head>
+<body>
+
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%237b3f8c%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23d8577e%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20rx%3D%2212%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223.2%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%2013.5v13M17%2013.5l-9%207.5M11.6%2018.3l5.8%208.2%22/%3E%3Cpath%20d%3D%22M21.5%2026.5v-13h5a3.5%203.5%200%200%201%200%207h-5M26.2%2020.5l4.6%206%22/%3E%3C/g%3E%3Cpath%20d%3D%22M33%204.8l1%202.3%202.3%201-2.3%201-1%202.3-1-2.3-2.3-1%202.3-1z%22%20fill%3D%22%23fff%22/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -650,7 +767,7 @@ function vInicio(){
   const hr = new Date().getHours();
   const hello = hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite';
   let h = head(readonlyView()?`Finanças de ${esc(nomeParceiro())}`:`${hello}, ${esc(meuNome())}`, 'Tudo em um só lugar', `Resumo de ${mLabel(mk).toLowerCase()}`, monthPicker());
-  if (S.offline) h += `<div class="banner">Não consegui acessar o armazenamento do app agora, então seus dados não aparecem nesta visualização. Abra o app pelo link do Claude para ver e salvar tudo.</div>`;
+  if (S.offline) h += `<div class="banner">Não consegui conectar ao Firebase. Confira a internet e o arquivo firebase-config.js.</div>`;
   h += `<div class="quick">
     <button class="qa" data-act="novo-gasto">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
     <button class="qa" data-act="nova-compra">${'<i>'+svg('cartao')+'</i>'}Compra no cartão</button>
@@ -679,7 +796,7 @@ function vInicio(){
       ${cats.length? `<div class="alloc" style="margin-bottom:14px">${cats.map(c=>`<i style="width:${c.v/t.desp*100}%;background:${c.c}" data-tip="${esc(c.n)}: ${esc(fmt(c.v))}"></i>`).join('')}</div><div class="rows">${cats.map(c=>`<div class="row" style="padding:7px 0"><i class="dot" style="background:${c.c}"></i><div class="grow">${c.n}</div><span class="muted num" style="font-size:.8rem">${pct(c.v/t.desp)}</span><span class="v">${fmt(c.v)}</span></div>`).join('')}</div>` : `<div class="empty"><p>Nada lançado neste mês ainda.</p><button class="btn pri" data-go="gastos">Abrir gastos do mês</button></div>`}
     </div>
     <div class="card"><div class="card-h"><div><h2>Últimas compras no cartão</h2><p>${mLabel(mk)}</p></div><button class="btn sm ghost" data-go="cartao">Ver tudo →</button></div>
-      ${compras.length? `<div class="rows">${compras.map(c=>`<div class="row">${dBox(c.data)}<div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">${esc(c.cartao)}${c.guardado?' · <span style="color:#1f3f8f;font-weight:600">guardado</span>':''}${c.parcela?' · '+esc(c.parcela):''}</div></div><span class="v">${fmt(c.valor)}</span><button class="iconbtn" aria-label="Apagar compra" data-del-compra="${c.id}">${svg('trash')}</button></div>`).join('')}</div>` : `<div class="empty"><p>Nenhuma compra no cartão neste mês.</p><p class="muted" style="margin:0;font-size:.84rem">Use o botão <b>+</b> para lançar.</p></div>`}
+      ${compras.length? `<div class="rows">${compras.map(c=>`<div class="row">${dBox(c.data)}<div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">${esc(c.cartao)}${c.guardado?' · <span style="color:#1f3f8f;font-weight:600">guardado</span>':''}${c.parcela?' · '+esc(c.parcela):''}</div></div><span class="v">${fmt(c.valor)}</span></div>`).join('')}</div>` : `<div class="empty"><p>Nenhuma compra no cartão neste mês.</p><p class="muted" style="margin:0;font-size:.84rem">Use o botão <b>+</b> para lançar.</p></div>`}
     </div>
   </div>`;
   if(RA.table) h += `<div class="section">${RA.table}</div>`;
@@ -3014,4 +3131,5 @@ function render(){
 boot();
 </script>
 
-</body></html>
+</body>
+</html>
