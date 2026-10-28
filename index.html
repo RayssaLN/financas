@@ -685,7 +685,7 @@ function previstoCartao(card,F){
   const c=composicaoFatura(card,F); let tot=0;
   c.it.forEach(x=>{
     if(x.t==='Conta') return;
-    if(x.t==='Parcela'){ const p=(S.cinfo.parcelas||[]).find(q=>q.id===x.pid); if(p&&compraGuardadaPorId(p.compraId)) return; }
+    if(x.t==='Parcela'){ const p=(S.cinfo.parcelas||[]).find(q=>q.id===x.pid); if(p&&(p.tipo==='guardado'||compraGuardadaPorId(p.compraId))) return; }
     if(x.t==='Compra'){ const cc=(S.cartao[x.mk]?.compras||[]).find(q=>q.id===x.compra); if(cc&&cc.guardado) return; }
     tot+=+x.v||0;
   });
