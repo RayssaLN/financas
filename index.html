@@ -679,10 +679,30 @@ function pickMonth(){
   UI.month = S.orc[tm] ? tm : (withData[withData.length-1] || tm);
 }
 function orcOf(mk){ return S.orc[mk] || null; }
+function compraGuardadaPorId(id){ for(const m of Object.values(S.cartao)){ const x=(m.compras||[]).find(c=>c.id===id); if(x) return !!x.guardado; } return false; }
+function previstoCartao(card,F){
+  // fatura do cartão que vence em F, menos o que já está guardado na caixinha e menos as contas fixas (que têm item próprio)
+  const c=composicaoFatura(card,F); let tot=0;
+  c.it.forEach(x=>{
+    if(x.t==='Conta') return;
+    if(x.t==='Parcela'){ const p=(S.cinfo.parcelas||[]).find(q=>q.id===x.pid); if(p&&compraGuardadaPorId(p.compraId)) return; }
+    if(x.t==='Compra'){ const cc=(S.cartao[x.mk]?.compras||[]).find(q=>q.id===x.compra); if(cc&&cc.guardado) return; }
+    tot+=+x.v||0;
+  });
+  return r2(tot);
+}
+function previstoAuto(o,it){
+  // "Cartão X" em Gastos do mês atual ou futuro: o previsto sai sozinho da fatura; null = usa o valor digitado
+  const mk=(o&&o.mes)||UI.month; if(!it||it.cat!=='fixos'||mk<thisMonth()) return null;
+  const m=/^Cartão (.+)$/.exec(it.nome||''); if(!m) return null;
+  const card=m[1].trim(); const cards=new Set([...(S.config.cartoes||[]),...cartoesFatura()]);
+  if(!cards.has(card)) return null;
+  return previstoCartao(card,mk);
+}
 function orcTotals(o){
   if(!o) return {renda:0,rendaPrev:0,desp:0,despPrev:0,saldo:0,saldoPrev:0,byCat:{}};
   const byCat={}; CATS.forEach(c=>byCat[c.k]={prev:0,real:0});
-  (o.itens||[]).forEach(it=>{ const b=byCat[it.cat]||(byCat[it.cat]={prev:0,real:0}); b.prev+=+it.previsto||0; b.real+=+it.real||0; });
+  (o.itens||[]).forEach(it=>{ const b=byCat[it.cat]||(byCat[it.cat]={prev:0,real:0}); const pa=previstoAuto(o,it); b.prev+=(pa!==null?pa:(+it.previsto||0)); b.real+=+it.real||0; });
   Object.entries(cartaoPorItem(o)).forEach(([k,v])=>{ const ck=k.split('|')[0]; (byCat[ck]||(byCat[ck]={prev:0,real:0})).real+=v; });
   const desp=sum(Object.values(byCat),b=>b.real), despPrev=sum(Object.values(byCat),b=>b.prev);
   return {renda:+o.renda||0, rendaPrev:+o.rendaPrevista||0, desp, despPrev, saldo:(+o.renda||0)-desp, saldoPrev:(+o.rendaPrevista||0)-despPrev, byCat};
@@ -939,8 +959,8 @@ function catBlock(o,c,t){
   const usados=new Set();
   const subRows=(g,key)=>{ const aberto=UI.abertos&&UI.abertos[key]; return aberto?g.itens.map(e=>`<tr class="card-sub"><td colspan="2">↳ ${esc(e.desc)} <span class="muted">· <span class="emo">💳</span> ${esc(e.info)}</span></td><td class="r num" style="color:var(--accent);font-weight:600">${fmt(e.valor)}</td><td colspan="2"></td></tr>`).join(''):''; };
   const pill=(g,key)=>`<button type="button" class="card-pill" data-card-toggle="${esc(key)}" aria-expanded="${!!(UI.abertos&&UI.abertos[key])}" title="Ver as compras no cartão"><span class="emo">💳</span> <span class="cp-nome">${g.itens.length>1?g.itens.length+' no cartão':esc(g.itens[0].card==='MP'?'Mercado Pago':g.itens[0].card||'cartão')}</span> <span class="chev">${UI.abertos&&UI.abertos[key]?'▴':'▾'}</span></button>`;
-  const linhas = itens.map(i=>{ const k=semAcento(i.nome); const g=por[k]; if(g) usados.add(k); const key=mk+'|'+c.k+'|'+k; const cg=g?r2(sum(g.itens,e=>e.valor)):0, real=r2((+i.real||0)+cg); const d=(+i.previsto||0)-real;
-    return `<tr><td><input class="cell-input cell-name" aria-label="Nome" data-item="${i.id}" data-f="nome" value="${esc(i.nome)}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Previsto de ${esc(i.nome)}" data-item="${i.id}" data-f="previsto" value="${r2(i.previsto).toLocaleString('pt-BR',{minimumFractionDigits:2})}"></td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Real de ${esc(i.nome)}" data-item="${i.id}" data-f="real" value="${real.toLocaleString('pt-BR',{minimumFractionDigits:2})}"${cg?` title="Inclui ${fmt(cg)} no cartão"`:''}></td><td class="r ${Math.abs(d)<0.005?'muted':d>0?'pos':'neg'}" style="font-size:.82rem">${Math.abs(d)<0.005?'—':fmt(d)}</td><td style="width:34px"><button class="iconbtn" aria-label="Apagar ${esc(i.nome)}" data-del-item="${i.id}">${svg('trash')}</button></td></tr>`; }).join('');
+  const linhas = itens.map(i=>{ const k=semAcento(i.nome); const g=por[k]; if(g) usados.add(k); const key=mk+'|'+c.k+'|'+k; const cg=g?r2(sum(g.itens,e=>e.valor)):0, real=r2((+i.real||0)+cg); const pa=previstoAuto(o,i), pv=pa!==null?pa:(+i.previsto||0), d=pv-real;
+    return `<tr><td><input class="cell-input cell-name" aria-label="Nome" data-item="${i.id}" data-f="nome" value="${esc(i.nome)}"></td><td class="r">${pa!==null?`<span class="num" title="Automático: fatura do cartão menos o que já está guardado e as contas fixas" style="display:inline-block;padding:4px 6px;font-weight:600">${fmt(pa)} <span class="pill good">auto</span></span>`:`<input class="cell-input" inputmode="decimal" aria-label="Previsto de ${esc(i.nome)}" data-item="${i.id}" data-f="previsto" value="${r2(i.previsto).toLocaleString('pt-BR',{minimumFractionDigits:2})}">`}</td><td class="r"><input class="cell-input" inputmode="decimal" aria-label="Real de ${esc(i.nome)}" data-item="${i.id}" data-f="real" value="${real.toLocaleString('pt-BR',{minimumFractionDigits:2})}"${cg?` title="Inclui ${fmt(cg)} no cartão"`:''}></td><td class="r ${Math.abs(d)<0.005?'muted':d>0?'pos':'neg'}" style="font-size:.82rem">${Math.abs(d)<0.005?'—':fmt(d)}</td><td style="width:34px"><button class="iconbtn" aria-label="Apagar ${esc(i.nome)}" data-del-item="${i.id}">${svg('trash')}</button></td></tr>`; }).join('');
   // itens que só existem no cartão (ainda sem linha no mês)
   const extras = Object.entries(por).filter(([k])=>!usados.has(k)).map(([k,g])=>{ const key=mk+'|'+c.k+'|'+k;
     const v=r2(sum(g.itens,e=>e.valor)); return `<tr><td><div style="padding:6px 8px">${esc(g.nome)}</div></td><td class="r num" style="padding-right:10px">0,00</td><td class="r num" style="padding-right:10px">${v.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td><td class="r neg" style="font-size:.82rem">${fmt(-v)}</td><td></td></tr>`; }).join('');
