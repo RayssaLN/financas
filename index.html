@@ -1331,7 +1331,7 @@ function vReserva(){
 function vInvest(){
   // a conta da corretora (Conta Clear) é saldo parado, não investimento: aparece só em Análise da carteira
   const cc=contaCorretora(); const inv = potesList('investimento').filter(p=>!cc||p.id!==cc.id);
-  let h = head('Investir','Investimentos','Corretora, cripto, renda fixa, exterior e o que mais você tiver', `<button class="btn pri" data-act="novo-pote" data-tipo="investimento">${svg('plus')}Novo investimento</button>`);
+  let h = head('Investir','Investimentos','Corretora, cripto, renda fixa, exterior e o que mais você tiver', `<button class="btn" data-act="comprar-ativo">${svg('plus')}Comprar / vender ativo</button><button class="btn pri" data-act="novo-pote" data-tipo="investimento">${svg('plus')}Novo investimento</button>`);
   const investido=p=>potAportado(p)+sum((p.movimentos||[]).filter(m=>m.tipo==='ajuste'),m=>m.valor);
   const tot=sum(inv,potSaldo), ap=sum(inv,investido), rd=sum(inv,potRend);
   const provAno=sum((S.prov.itens||[]).filter(x=>x.data.startsWith(thisMonth().slice(0,4))),x=>x.valor);
@@ -2063,6 +2063,9 @@ const ACT = {
   'editar-parcela'(d){ parcForm(d.id); },
   'apagar-parcela'(d){ save('cartaoinfo','geral',{...S.cinfo,parcelas:(S.cinfo.parcelas||[]).filter(x=>x.id!==d.id)}); toast('Apagada'); },
   'nova-conta'(){ const cards=S.config.cartoes||['Nubank']; gastoRapido({recorrente:true,forma:'card:'+cards[0],guardado:(UI.contasTab||'guardado')==='guardado'}); },
+  'comprar-ativo'(){ const inv=potesList('investimento'); if(!inv.length){ toast('Crie um investimento primeiro (ex.: Ações, FIIs, Cripto)'); return; }
+    form({title:'Comprar ou vender ativo', submit:'Continuar', fields:[{name:'pote',label:'Em qual investimento',type:'select',options:inv.map(p=>[p.id,p.nome+(p.classe?' ('+p.classe+')':'')]),value:inv[0].id}],
+      onSubmit:v=>{ setTimeout(()=>ACT['nova-compra-ativo']({pote:v.pote}),0); }}); },
   'nova-compra-ativo'(d){ const p=S.potes[d.pote];
     form({title:'Compra ou venda · '+p.nome, fields:[
       {name:'tipo',label:'Tipo',type:'seg',options:[['compra','Compra'],['venda','Venda']],value:'compra'},
