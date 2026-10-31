@@ -1617,8 +1617,9 @@ function emprForm(id,tipoNovo){
     {name:'desc',label:'Descrição (opcional)',value:id?e.desc:''},
     {type:'row',items:[{name:'total',label:ehE?'Valor emprestado':'Valor total a pagar',type:'money',req:true,value:tot?tot.toLocaleString('pt-BR',{minimumFractionDigits:2}):''},{name:'n',label:ehE?'Vai pagar em quantas vezes':'Nº de parcelas',value:n,req:true}]},
     {type:'row',items:[{name:'inicio',label:ehE?'Quando vai te pagar':'Mês da 1ª parcela',type:'select',options:[...(ehE?[['','Sem data combinada']]:[]),...meses.map(m=>[m,mLabel(m)])],value:e.inicio},{name:'dia',label:'Dia (opcional)',value:e.dia||''}]},
+    ...(id||!ehE?[]:[{name:'origem',label:'De onde saiu o dinheiro',type:'select',options:[['','Minha conta (entra em Gastos gerais)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,'Caixinha: '+p.nome+' ('+fmt(potSaldo(p))+')'])],value:''}]),
     ...(id?[]:[
-      {name:'mov',label:ehE?'O dinheiro saiu da minha conta agora (entra em Gastos gerais)':'O dinheiro entrou na minha conta agora (entra na Renda do mês)',type:'check',value:true},
+      {name:'mov',label:ehE?'O dinheiro saiu agora (da conta ou da caixinha escolhida)':'O dinheiro entrou na minha conta agora (entra na Renda do mês)',type:'check',value:true},
       {name:'ja',label:ehE?'Quantas vezes a pessoa já pagou antes (não entra na Renda)':'Parcelas já pagas antes de usar o app (não entram em Gastos)',value:''}]),
     {name:'obs',label:'Observação (opcional)',value:e.obs||''},
   ], extra:id?`<div class="confirm" id="delzone"><span style="flex:1">Apagar ${esc(e.desc)}? O que já entrou em Gastos e Renda continua lá.</span><button type="button" class="btn sm danger" data-empr-del="${id}">Apagar</button></div>`:'',
@@ -1629,9 +1630,11 @@ function emprForm(id,tipoNovo){
     q.pagamentos.forEach((p,i)=>{ if(i<q.valores.length) q.valores[i]=p.valor; });
     if(pg&&pg<k){ const resto=r2(total-sum(q.valores.slice(0,pg))); q.valores=[...q.valores.slice(0,pg),...parcelasDe(Math.max(0,resto),k-pg)]; }
     if(!id){ const ja=Math.min(k,parseInt(v.ja)||0); for(let i=0;i<ja;i++) q.pagamentos.push({data:'',valor:q.valores[i],antes:true});
-      if(v.mov){ const hoje=todayISO(); q.inicial = ehE ? {gasto:lancarNoGasto('gerais',desc,total,hoje,desc)} : {receb:lancarRecebido('Transferência',total,hoje,desc)}; } }
+      if(v.mov){ const hoje=todayISO();
+        if(ehE&&v.origem&&S.potes[v.origem]){ const pq=JSON.parse(JSON.stringify(S.potes[v.origem])); pq.movimentos=pq.movimentos||[]; const mid=uid('m'); pq.movimentos.push({id:mid,data:hoje,tipo:'resgate',valor:total,obs:'Emprestado para '+quem}); save('potes',v.origem,pq); q.inicial={pote:v.origem,mov:mid}; }
+        else q.inicial = ehE ? {gasto:lancarNoGasto('gerais',desc,total,hoje,desc)} : {receb:lancarRecebido('Transferência',total,hoje,desc)}; } }
     salvarEmpr([...emprList().filter(x=>x.id!==q.id),q]);
-    toast(id?'Salvo':(ehE?'Empréstimo para '+quem+' cadastrado'+(v.mov?' · '+fmt(total)+' em Gastos gerais':''):'Empréstimo cadastrado'+(v.mov?' · '+fmt(total)+' na Renda do mês':''))); }});
+    toast(id?'Salvo':(ehE?'Empréstimo para '+quem+' cadastrado'+(v.mov?(v.origem?' · '+fmt(total)+' saiu da caixinha':' · '+fmt(total)+' em Gastos gerais'):''):'Empréstimo cadastrado'+(v.mov?' · '+fmt(total)+' na Renda do mês':''))); }});
 }
 function emprPagar(id,valorOutro){
   const L=JSON.parse(JSON.stringify(emprList())); const e=L.find(x=>x.id===id); if(!e) return; const i=(e.pagamentos||[]).length; if(i>=e.valores.length) return;
