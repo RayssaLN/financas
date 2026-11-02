@@ -1626,7 +1626,7 @@ function emprForm(id,tipoNovo){
   onSubmit:v=>{ const total=r2(parseNum(v.total)), k=parseInt(v.n); if(!total) return 'Informe o valor'; if(!(k>=1&&k<=120)) return 'Número de vezes entre 1 e 120';
     const pg=(e.pagamentos||[]).length; if(k<pg) return 'Já foram pagas '+pg+' parcelas';
     const quem=v.quem.trim(), desc=v.desc.trim()||(ehE?'Emprestei para '+quem:'Empréstimo com '+quem);
-    const q={...e,tipo:emprTipo(e),id:id||uid('em'),desc,quem,valores:parcelasDe(total,k),inicio:v.inicio,dia:parseInt(v.dia)||'',obs:v.obs.trim(),pagamentos:e.pagamentos||[]};
+    const q={...e,tipo:emprTipo(e),id:id||uid('em'),desc,quem,valores:parcelasDe(total,k),inicio:v.inicio,dia:parseInt(v.dia)||'',obs:v.obs.trim(),pagamentos:e.pagamentos||[],origemPote:(ehE&&v.origem)||e.origemPote||''};
     q.pagamentos.forEach((p,i)=>{ if(i<q.valores.length) q.valores[i]=p.valor; });
     if(pg&&pg<k){ const resto=r2(total-sum(q.valores.slice(0,pg))); q.valores=[...q.valores.slice(0,pg),...parcelasDe(Math.max(0,resto),k-pg)]; }
     if(!id){ const ja=Math.min(k,parseInt(v.ja)||0); for(let i=0;i<ja;i++) q.pagamentos.push({data:'',valor:q.valores[i],antes:true});
@@ -1636,7 +1636,7 @@ function emprForm(id,tipoNovo){
     salvarEmpr([...emprList().filter(x=>x.id!==q.id),q]);
     toast(id?'Salvo':(ehE?'Empréstimo para '+quem+' cadastrado'+(v.mov?(v.origem?' · '+fmt(total)+' saiu da caixinha':' · '+fmt(total)+' em Gastos gerais'):''):'Empréstimo cadastrado'+(v.mov?' · '+fmt(total)+' na Renda do mês':''))); }});
 }
-function emprPagar(id,valorOutro){
+function emprPagar(id,valorOutro,destino){
   const L=JSON.parse(JSON.stringify(emprList())); const e=L.find(x=>x.id===id); if(!e) return; const i=(e.pagamentos||[]).length; if(i>=e.valores.length) return;
   const ehE=emprTipo(e)==='emprestei';
   let val=e.valores[i];
@@ -1644,14 +1644,18 @@ function emprPagar(id,valorOutro){
     const restantes=Math.max(0,e.valores.length-i-1);
     e.valores=[...e.valores.slice(0,i),val,...(resto>0.004?parcelasDe(resto,Math.max(1,restantes)):[])]; }
   const data=todayISO(), nTot=e.valores.length, rot=(nTot>1?' · parcela '+(i+1)+'/'+nTot:'');
-  const ref = ehE ? {receb:lancarRecebido('Transferência',val,data,(e.quem||e.desc)+' pagou'+rot)} : {gasto:lancarNoGasto('fixos',e.desc,val,data,e.desc+rot)};
+  let dest=destino!==undefined?destino:(e.origemPote||''); if(!ehE||!dest||!S.potes[dest]) dest='';
+  let ref;
+  if(!ehE) ref={gasto:lancarNoGasto('fixos',e.desc,val,data,e.desc+rot)};
+  else if(!dest) ref={receb:lancarRecebido('Transferência',val,data,(e.quem||e.desc)+' pagou'+rot)};
+  else { const obsR='Recebido de '+(e.quem||e.desc)+' (empréstimo)'; const rc=lancarRecebido('Transferência',val,data,(e.quem||e.desc)+' pagou'+rot); const gs=lancarNoGasto('poupanca',S.potes[dest].nome,r2(val),data,obsR); const pq=JSON.parse(JSON.stringify(S.potes[dest])); pq.movimentos=pq.movimentos||[]; const mid=uid('m'); pq.movimentos.push({id:mid,data,tipo:'aporte',valor:r2(val),obs:obsR}); save('potes',dest,pq); ref={receb:rc,gasto:gs,pote:dest,mov:mid}; }
   (e.pagamentos=e.pagamentos||[]).push({data,valor:val,...ref}); salvarEmpr(L);
-  toast(ehE?fmt(val)+' recebido de '+(e.quem||e.desc)+' · entrou na Renda do mês':'Parcela '+(i+1)+' de '+e.desc+' paga · '+fmt(val)+' em Gastos do mês');
+  toast(ehE?fmt(val)+' recebido de '+(e.quem||e.desc)+(dest?' · foi para a caixinha '+S.potes[dest].nome:' · entrou na Renda do mês'):'Parcela '+(i+1)+' de '+e.desc+' paga · '+fmt(val)+' em Gastos do mês');
 }
 function emprDesfazer(id){
   const L=JSON.parse(JSON.stringify(emprList())); const e=L.find(x=>x.id===id); if(!e||!(e.pagamentos||[]).length) return;
   const p=e.pagamentos.pop();
-  if(p.gasto) tirarDoGasto(p.gasto); if(p.receb) tirarRecebido(p.receb);
+  if(p.gasto) tirarDoGasto(p.gasto); if(p.receb) tirarRecebido(p.receb); if(p.pote&&p.mov) tirarMovConta({pote:p.pote,mov:p.mov});
   if(p.mes&&p.avulso) tirarDoGasto({mes:p.mes,item:p.item,avulso:p.avulso,valor:p.valor}); // pagamentos da versão anterior
   salvarEmpr(L); toast(emprTipo(e)==='emprestei'?'Recebimento desfeito':'Pagamento desfeito');
 }
@@ -3001,9 +3005,9 @@ Object.assign(ACT,{
   'editar-bem'(d){ bemForm(d.id); },
   'novo-empr'(d){ emprForm(null,d&&d.tipo); },
   'empr-outro'(d){ const e=emprList().find(x=>x.id===d.id); if(!e) return; const ehE=emprTipo(e)==='emprestei';
-    form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true}],
+    form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true},...(ehE?[{name:'dest',label:'Onde entrou',type:'select',options:[['','Minha conta (Renda do mês)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,'Caixinha: '+p.nome])],value:e.origemPote||''}]:[])],
       extra:`<p class="note" style="margin-top:-4px">Falta ${fmt(sum(e.valores.slice(emprPago(e))))}. O que sobrar é dividido nas próximas parcelas.</p>`,
-      onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; emprPagar(d.id,val); }}); },
+      onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; emprPagar(d.id,val,ehE?v.dest:undefined); }}); },
   'editar-empr'(d){ emprForm(d.id); },
   'nova-compra'(){ const cards=S.config.cartoes||['Nubank']; const c=UI.view==='cartao'&&UI.cartaoFiltro&&UI.cartaoFiltro!=='Todos'?UI.cartaoFiltro:(UI.lastForma&&UI.lastForma.startsWith('card:')?UI.lastForma.slice(5):cards[0]); gastoRapido({forma:'card:'+c}); },
 });
