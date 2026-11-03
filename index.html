@@ -1599,7 +1599,7 @@ function vEmprestimos(){
         <div style="text-align:right"><div class="muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600">${rest?(ehE?'Falta receber':'Falta'):(ehE?'Recebido':'Quitado')}</div><div style="font-family:var(--display);font-weight:700;font-size:1.2rem" class="num">${fmt(rest)}</div></div></div>
       ${n>1?`<div style="display:flex;gap:3px;margin:12px 0 10px">${e.valores.map((v,i)=>`<i title="Parcela ${i+1}${e.inicio?' · '+esc(mShort(addMonth(e.inicio,i))):''}: ${esc(fmt(v))}" style="flex:1;height:8px;border-radius:3px;background:${i<pg?cor:'var(--surface-2)'}"></i>`).join('')}</div>`:'<div style="height:10px"></div>'}
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:.84rem">${n>1?`<b>${pg}</b> de ${n} ${ehE?'recebidas':'pagas'}`:(pg?(ehE?'Recebido':'Pago'):(ehE?'Ainda não recebeu':'Ainda não pagou'))}${prox?` · ${n>1?'próxima: ':''}<b>${fmt(e.valores[pg])}</b> ${prox==='sem'?'<span class="pill">sem data</span>':`em ${mShort(prox)}/${prox.slice(2,4)}`}${atras?' <span class="pill bad">atrasada</span>':''}`:''}</span>
-        ${ro?'':`<span class="actions">${pg?`<button class="btn sm ghost" data-empr-desf="${e.id}">Desfazer</button>`:''}${prox?`<button class="btn sm pri" data-empr-pagar="${e.id}">${ehE?'Recebi':'Paguei'} ${fmt(e.valores[pg])}</button><button class="btn sm ghost" data-act="empr-outro" data-id="${e.id}">Outro valor</button>`:''}<button class="btn sm ghost" data-act="editar-empr" data-id="${e.id}">Editar</button></span>`}</div>
+        ${ro?'':`<span class="actions">${pg?`<button class="btn sm ghost" data-empr-desf="${e.id}">Desfazer</button>`:''}${prox?`<button class="btn sm pri" data-empr-pagar="${e.id}">${ehE?'Recebi':'Paguei'} ${fmt(e.valores[pg])}</button><button class="btn sm ghost" data-act="empr-outro" data-id="${e.id}">${ehE?'Escolher valor e lugar':'Outro valor'}</button>`:''}<button class="btn sm ghost" data-act="editar-empr" data-id="${e.id}">Editar</button></span>`}</div>
       ${(e.pagamentos||[]).length?`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:.8rem;color:var(--ink-2);font-weight:600">${ehE?'Recebimentos':'Pagamentos'} (${e.pagamentos.length})</summary><div class="rows">${e.pagamentos.map((p,i)=>`<div class="row" style="padding:5px 0;font-size:.84rem"><div class="grow">${n>1?'Parcela '+(i+1)+' · ':''}${p.data?p.data.split('-').reverse().join('/'):'antes do app'}</div><span class="v">${fmt(p.valor)}</span></div>`).join('')}</div></details>`:''}
     </div>`; };
   h+= ativos.length?`<div class="grid g2 section">${ativos.map(card).join('')}</div>`:`<div class="card empty section"><h3>${ehE?'Ninguém te devendo':'Nenhum empréstimo em aberto'}</h3><p>${ehE?'Quando emprestar dinheiro para alguém, cadastre aqui para acompanhar se a pessoa já te pagou.':'Cadastre um empréstimo para acompanhar as parcelas.'}</p></div>`;
@@ -1644,11 +1644,21 @@ function emprPagar(id,valorOutro,destino){
     const restantes=Math.max(0,e.valores.length-i-1);
     e.valores=[...e.valores.slice(0,i),val,...(resto>0.004?parcelasDe(resto,Math.max(1,restantes)):[])]; }
   const data=todayISO(), nTot=e.valores.length, rot=(nTot>1?' · parcela '+(i+1)+'/'+nTot:'');
-  let dest=destino!==undefined?destino:(e.origemPote||(e.inicial&&e.inicial.pote)||''); if(!ehE||!dest||!S.potes[dest]) dest='';
+  const origemCx=e.origemPote||(e.inicial&&e.inicial.pote)||'';
+  let dest=destino!==undefined?destino:origemCx; if(!ehE||!dest||!S.potes[dest]) dest='';
+  const nomeRec=(e.quem||e.desc)+' pagou'+rot, obsR='Recebido de '+(e.quem||e.desc)+' (empréstimo)';
   let ref;
   if(!ehE) ref={gasto:lancarNoGasto('fixos',e.desc,val,data,e.desc+rot)};
-  else if(!dest) ref={receb:lancarRecebido('Transferência',val,data,(e.quem||e.desc)+' pagou'+rot)};
-  else { const obsR='Recebido de '+(e.quem||e.desc)+' (empréstimo)'; const rc=lancarRecebido('Transferência',val,data,(e.quem||e.desc)+' pagou'+rot); const gs=lancarNoGasto('poupanca',S.potes[dest].nome,r2(val),data,obsR); const pq=JSON.parse(JSON.stringify(S.potes[dest])); pq.movimentos=pq.movimentos||[]; const mid=uid('m'); pq.movimentos.push({id:mid,data,tipo:'aporte',valor:r2(val),obs:obsR}); save('potes',dest,pq); ref={receb:rc,gasto:gs,pote:dest,mov:mid}; }
+  else if(!dest) ref={receb:lancarRecebido('Transferência',val,data,nomeRec)};
+  else {
+    // voltou para a caixinha de onde saiu: é o seu próprio dinheiro, não entra como recebido nem em Gastos
+    // caixinha de outro lugar: entra como guardado (e fica registrado como recebido)
+    const pq=JSON.parse(JSON.stringify(S.potes[dest])); pq.movimentos=pq.movimentos||[]; const mid=uid('m');
+    let rc=null, gs=null;
+    if(!origemCx){ rc=lancarRecebido('Transferência',val,data,nomeRec); gs=lancarNoGasto('poupanca',pq.nome,r2(val),data,obsR); }
+    pq.movimentos.push({id:mid,data,tipo:'aporte',valor:r2(val),obs:obsR}); save('potes',dest,pq);
+    ref={receb:rc,gasto:gs,pote:dest,mov:mid};
+  }
   (e.pagamentos=e.pagamentos||[]).push({data,valor:val,...ref}); salvarEmpr(L);
   toast(ehE?fmt(val)+' recebido de '+(e.quem||e.desc)+(dest?' · foi para a caixinha '+S.potes[dest].nome:' · entrou na Renda do mês'):'Parcela '+(i+1)+' de '+e.desc+' paga · '+fmt(val)+' em Gastos do mês');
 }
@@ -3005,7 +3015,7 @@ Object.assign(ACT,{
   'editar-bem'(d){ bemForm(d.id); },
   'novo-empr'(d){ emprForm(null,d&&d.tipo); },
   'empr-outro'(d){ const e=emprList().find(x=>x.id===d.id); if(!e) return; const ehE=emprTipo(e)==='emprestei';
-    form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true},...(ehE?[{name:'dest',label:'Onde entrou',type:'select',options:[['','Minha conta (Renda do mês)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,'Caixinha: '+p.nome])],value:e.origemPote||(e.inicial&&e.inicial.pote)||''}]:[])],
+    form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true,value:(()=>{const pg=(e.pagamentos||[]).length; return e.valores[pg]!=null?r2(e.valores[pg]).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';})()},...(ehE?[{name:'dest',label:'Onde entrou',type:'select',options:[['','Minha conta (Renda do mês)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,(p.id===(e.origemPote||(e.inicial&&e.inicial.pote))?'De onde saiu: ':'Caixinha: ')+p.nome])],value:e.origemPote||(e.inicial&&e.inicial.pote)||''}]:[])],
       extra:`<p class="note" style="margin-top:-4px">Falta ${fmt(sum(e.valores.slice(emprPago(e))))}. O que sobrar é dividido nas próximas parcelas.</p>`,
       onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; emprPagar(d.id,val,ehE?v.dest:undefined); }}); },
   'editar-empr'(d){ emprForm(d.id); },
