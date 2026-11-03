@@ -2598,9 +2598,10 @@ function vRole(){
   const gm=L.filter(l=>l.tipo==='gasto'&&l.data.startsWith(mk));
   const byC=ROLE_CATS.map(([k,n,e])=>({k,n,e,v:sum(gm.filter(l=>l.cat===k),l=>l.valor)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
   const ms=[...new Set(L.map(l=>l.data.slice(0,7)))].sort().slice(-6);
+  const comidaHtml=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px">${[C.me,C.parc].map(u=>{const v=sum(gm.filter(l=>COMIDA.includes(l.cat)&&l.quem===u),l=>l.valor); return `<div style="flex:1;min-width:130px;border:1px solid var(--line);border-radius:12px;padding:10px"><div class="lbl"><span class="who"><i style="background:${corDe(u)}"></i>Comida · ${esc(nomeDe(u))}</span></div><div class="val sm">${fmt(v)}</div></div>`;}).join('')}</div>`;
   const ser=cs.map((c,i)=>({name:c.nome,color:i?'var(--gold)':'var(--accent)',values:ms.map(m=>sum(L.filter(l=>l.tipo==='gasto'&&l.carteira===c.id&&l.data.startsWith(m)),l=>l.valor))}));
   h += `<div class="grid g2 section">
-    <div class="card"><div class="card-h"><div><h2>Onde vocês gastaram em ${mShort(mk)}</h2></div></div>${byC.length?`<div class="rows">${byC.map(x=>`<div class="row" style="padding:7px 0"><span class="role-emo" style="font-size:1.2rem">${x.e}</span><div class="grow"><div class="t">${x.n}</div><div class="bar" style="margin-top:5px;height:6px"><i style="width:${gMes?x.v/gMes*100:0}%"></i></div></div><span class="v">${fmt(x.v)}</span></div>`).join('')}</div>`:'<p class="muted">Nenhum gasto neste mês ainda.</p>'}</div>
+    <div class="card"><div class="card-h"><div><h2>Onde vocês gastaram em ${mShort(mk)}</h2></div></div>${comidaHtml}${byC.length?`<div class="rows">${byC.map(x=>`<div class="row" style="padding:7px 0"><span class="role-emo" style="font-size:1.2rem">${x.e}</span><div class="grow"><div class="t">${x.n}</div><div class="bar" style="margin-top:5px;height:6px"><i style="width:${gMes?x.v/gMes*100:0}%"></i></div></div><span class="v">${fmt(x.v)}</span></div>`).join('')}</div>`:'<p class="muted">Nenhum gasto neste mês ainda.</p>'}</div>
     <div class="card"><div class="card-h"><div><h2>Gastos por mês</h2><p>Por carteira</p></div></div>${ms.length?barChart({labels:ms.map(mShort),series:ser,stacked:true,h:180})+legend(ser):'<p class="muted">Sem dados ainda.</p>'}</div>
   </div>`;
   const mm=[...new Set(L.map(l=>l.data.slice(0,7)))].sort();
