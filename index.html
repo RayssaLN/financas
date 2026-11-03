@@ -2592,8 +2592,8 @@ function vRole(){
   // entrada rápida do VR do mês
   const faltaVR=cs.filter(c=>+c.padrao && !L.some(l=>l.tipo==='entrada'&&!l.inicial&&l.carteira===c.id&&l.data.startsWith(mk)));
   if (faltaVR.length) h += `<div class="banner section" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span>O VR de ${mLabel(mk).toLowerCase()} ainda não foi lançado${faltaVR.length===1?' em '+esc(faltaVR[0].nome):''}.</span><span class="actions">${faltaVR.map(c=>`<button class="btn sm pri" data-act="role-vr-rapido" data-cart="${c.id}">+ ${fmt(c.padrao)} em ${esc(c.nome)}</button>`).join('')}</span></div>`;
-  const alelo=cs.find(c=>c.tipo==='alelo');
-  if (alelo && carteiraSaldo(f,alelo.id)>0) h += `<div class="card section" style="background:var(--accent-soft);border:0;box-shadow:none"><p style="margin:0;font-size:.9rem"><span class="emo">💡</span> <b>Dica:</b> o Alelo só passa em comida (restaurante, lanchonete e mercado). Usem ele primeiro nessas horas e guardem o dinheiro para cinema, delivery por Pix e o que o Alelo não paga. Assim o dinheiro livre dura mais.</p></div>`;
+  const vales=cs.filter(c=>c.tipo==='alelo');
+  if (vales.some(c=>carteiraSaldo(f,c.id)>0)) h += `<div class="card section" style="background:var(--accent-soft);border:0;box-shadow:none"><p style="margin:0;font-size:.9rem"><span class="emo">💡</span> <b>Dica:</b> o vale refeição só passa em comida (restaurante, lanchonete e mercado). Usem ele primeiro nessas horas e guardem o dinheiro para cinema, delivery por Pix e o que o Alelo não paga. Assim o dinheiro livre dura mais.</p></div>`;
   // por categoria no mês
   const gm=L.filter(l=>l.tipo==='gasto'&&l.data.startsWith(mk));
   const byC=ROLE_CATS.map(([k,n,e])=>({k,n,e,v:sum(gm.filter(l=>l.cat===k),l=>l.valor)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
@@ -2620,19 +2620,19 @@ Object.assign(ACT,{
     form({title:'Entrou VR', fields:[{name:'carteira',label:'Em qual carteira',type:'seg',options:cs.map(c=>[c.id,c.nome]),value:(cs.find(c=>c.dono===C.me)||cs[0]).id},{type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},{name:'desc',label:'Obs (opcional, ex.: Alelo passado pra Maria, ela me deu em dinheiro)'}],
       onSubmit:v=>{ const c=cs.find(x=>x.id===v.carteira); const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; saveFundo({...C.fundo,lancamentos:[...(C.fundo.lancamentos||[]),{id:uid('r'),data:v.data,tipo:'entrada',carteira:v.carteira,valor:val,quem:c.dono,desc:(v.desc||'').trim()}]}); toast('Lançado'); }}); },
   'role-vr-rapido'(d){ const c=C.fundo.carteiras.find(x=>x.id===d.cart); saveFundo({...C.fundo,lancamentos:[...(C.fundo.lancamentos||[]),{id:uid('r'),data:todayISO(),tipo:'entrada',carteira:c.id,valor:+c.padrao,quem:c.dono}]}); toast('VR de '+mShort(thisMonth())+' lançado'); },
-  'role-gasto'(){ const cs=C.fundo.carteiras; const al=cs.find(c=>c.tipo==='alelo');
+  'role-gasto'(){ const cs=C.fundo.carteiras; const vales=cs.filter(c=>c.tipo==='alelo'); const al=vales[0];
     form({title:'Gasto do rolê', fields:[
       {name:'desc',label:'O que foi / obs (ex.: Almoço no shopping, ou Alelo passado pra Maria)'},
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
       {name:'cat',label:'Tipo',type:'select',options:ROLE_CATS.map(c=>[c[0],c[2]+' '+c[1]]),value:'lanche'},
       {name:'carteira',label:'Pago com',type:'seg',options:cs.map(c=>[c.id,(c.tipo==='alelo'?'💳 ':'💵 ')+c.nome]),value:(al||cs[0]).id},
     ], onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor';
-      const dica = al && v.carteira!==al.id && COMIDA.includes(v.cat) && carteiraSaldo(C.fundo,al.id)>=val;
+      const dica = vales.length && !vales.some(x=>x.id===v.carteira) && COMIDA.includes(v.cat) && vales.some(x=>carteiraSaldo(C.fundo,x.id)>=val);
       saveFundo({...C.fundo,lancamentos:[...(C.fundo.lancamentos||[]),{id:uid('r'),data:v.data,tipo:'gasto',carteira:v.carteira,valor:val,desc:v.desc.trim(),cat:v.cat,quem:C.me,dica:!!dica}]});
       toast(dica?'Salvo. Dica: esse dava pra pagar com o Alelo 😉':'Gasto lançado'); }}); },
   'role-config'(){ const cs=C.fundo.carteiras;
-    form({title:'Carteiras do rolê', fields:cs.flatMap((c,i)=>[{type:'row',items:[{name:'n'+i,label:(c.tipo==='alelo'?'💳 ':'💵 ')+'Nome',value:c.nome},{name:'p'+i,label:'VR por mês',type:'money',value:c.padrao?r2(c.padrao).toLocaleString('pt-BR',{minimumFractionDigits:2}):''}]}]),
-      onSubmit:v=>{ saveFundo({...C.fundo,carteiras:cs.map((c,i)=>({...c,nome:(v['n'+i]||c.nome).trim(),padrao:r2(parseNum(v['p'+i]))}))}); toast('Carteiras salvas'); }}); },
+    form({title:'Carteiras do rolê', fields:cs.flatMap((c,i)=>[{type:'row',items:[{name:'n'+i,label:'Nome do cartão ou carteira',value:c.nome},{name:'t'+i,label:'Tipo',type:'select',options:[['alelo','Vale refeição (só comida)'],['dinheiro','Dinheiro']],value:c.tipo==='alelo'?'alelo':'dinheiro'}]},{type:'row',items:[{name:'d'+i,label:'Quem usa',type:'select',options:[[C.me,meuNome()],[C.parc,nomeParceiro()]],value:c.dono},{name:'p'+i,label:'VR por mês',type:'money',value:c.padrao?r2(c.padrao).toLocaleString('pt-BR',{minimumFractionDigits:2}):''}]}]),
+      onSubmit:v=>{ saveFundo({...C.fundo,carteiras:cs.map((c,i)=>({...c,nome:(v['n'+i]||c.nome).trim(),tipo:v['t'+i]||c.tipo,dono:v['d'+i]||c.dono,padrao:r2(parseNum(v['p'+i]))}))}); toast('Carteiras salvas'); }}); },
 });
 /* ================= importar extrato / fatura ================= */
 const IMP = { linhas:[], tipo:'conta', cartao:'Nubank', fatura:null, arquivo:'' };
