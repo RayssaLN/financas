@@ -705,7 +705,8 @@ function orcTotals(o){
   (o.itens||[]).forEach(it=>{ const b=byCat[it.cat]||(byCat[it.cat]={prev:0,real:0}); const pa=previstoAuto(o,it); b.prev+=(pa!==null?pa:(+it.previsto||0)); b.real+=+it.real||0; });
   Object.entries(cartaoPorItem(o)).forEach(([k,v])=>{ const ck=k.split('|')[0]; (byCat[ck]||(byCat[ck]={prev:0,real:0})).real+=v; });
   const desp=sum(Object.values(byCat),b=>b.real), despPrev=sum(Object.values(byCat),b=>b.prev);
-  return {renda:+o.renda||0, rendaPrev:+o.rendaPrevista||0, desp, despPrev, saldo:(+o.renda||0)-desp, saldoPrev:(+o.rendaPrevista||0)-despPrev, byCat};
+  const rendaT=(+o.renda||0)+autoCarry(o);
+  return {renda:rendaT, rendaPrev:+o.rendaPrevista||0, desp, despPrev, saldo:rendaT-desp, saldoPrev:(+o.rendaPrevista||0)-despPrev, byCat};
 }
 function faturaOf(mk, cartao){ const c=S.cartao[mk]; if(!c) return 0; return sum((c.compras||[]).filter(x=>!cartao||cartao==='Todos'||x.cartao===cartao), x=>x.valor); }
 function potSaldo(p){ return sum(p.movimentos||[], m=> m.tipo==='resgate' ? -m.valor : m.valor); }
@@ -894,14 +895,17 @@ const FONTES_PADRAO=['Renda','Saldo anterior','Renda extra','Benefício','Transf
 function fontesRenda(){ return (S.config.fontesRenda&&S.config.fontesRenda.length)?S.config.fontesRenda:FONTES_PADRAO; }
 function mapFonte(nome){ const fs=fontesRenda(), n=semAcento(nome); const ach=re=>fs.find(f=>re.test(semAcento(f)));
   return fs.find(f=>semAcento(f)===n) || (/extra/.test(n)&&ach(/extra/)) || (/benef|vale|\bvr\b|\bva\b|alelo/.test(n)&&ach(/benef/)) || (/transf|pix/.test(n)&&ach(/transf/)) || (/renda|salario|lwm/.test(n)&&ach(/^renda$/)) || (/sobra|saldo/.test(n)&&ach(/saldo/)) || nome; }
-function rendaMes(o){
+function rendaMesBase(o){
   if(o.recebidos||o.previstas) return {prev:{...(o.previstas||{})}, rec:[...(o.recebidos||[])]};
   const prev={}, rec=[];
   (o.rendas||[]).forEach(r=>{ const f=mapFonte(r.nome); prev[f]=r2((prev[f]||0)+(+r.previsto||0)); if(+r.real) rec.push({id:'ant-'+semAcento(r.nome).replace(/[^a-z0-9]/g,''),data:(o.mes||UI.month)+'-01',fonte:f,valor:r2(r.real),desc:r.nome}); });
   if(!(o.rendas||[]).length){ if(+o.rendaPrevista) prev['Renda']=+o.rendaPrevista; if(+o.renda) rec.push({id:'ant-renda',data:(o.mes||UI.month)+'-01',fonte:'Renda',valor:+o.renda,desc:'Renda'}); }
   return {prev,rec};
 }
-function gravarRenda(o,rm){ o.previstas=rm.prev; o.recebidos=rm.rec; delete o.rendas; o.renda=r2(sum(rm.rec,x=>x.valor)); o.rendaPrevista=r2(sum(Object.values(rm.prev),v=>v)); return o; }
+function autoCarry(o){ // o que sobrou do mês anterior entra sozinho como Saldo anterior
+  const mk=o.mes||UI.month, po=S.orc[addMonth(mk,-1)]; if(!po) return 0; return r2(orcTotals(po).saldo||0); }
+function rendaMes(o){ const b=rendaMesBase(o); const a=autoCarry(o); if(a&&!b.rec.some(r=>r.fonte==='Saldo anterior')) b.rec=[...b.rec,{id:'auto-saldo',data:(o.mes||UI.month)+'-01',fonte:'Saldo anterior',valor:a,desc:'Sobrou de '+mLabel(addMonth(o.mes||UI.month,-1)),auto:true}]; return b; }
+function gravarRenda(o,rm){ const real=rm.rec.filter(r=>!r.auto); o.previstas=rm.prev; o.recebidos=real; delete o.rendas; o.renda=r2(sum(real,x=>x.valor)); o.rendaPrevista=r2(sum(Object.values(rm.prev),v=>v)); return o; }
 function addRecebido(o,fonte,valor,data,desc){ const rm=rendaMes(o); rm.rec.push({id:uid('r'),data,fonte,valor:r2(valor),desc:desc||''}); return gravarRenda(o,rm); }
 function previstasDoMesAnterior(from){ if(!from) return {}; const rm=rendaMes(from); const out={}; [...new Set([...Object.keys(rm.prev),...rm.rec.map(r=>r.fonte)])].forEach(f=>{ const rec=sum(rm.rec.filter(r=>r.fonte===f),r=>r.valor); const v=f==='Saldo anterior'?0:(rec||rm.prev[f]||0); if(v) out[f]=r2(v); }); return out; }
 function fontesForaInvest(){ const m=S.config.metaInvest||{}; return Array.isArray(m.fora)?m.fora:['Transferência']; }
@@ -1024,7 +1028,7 @@ function vCompras(){
   </div>`;
   h += cartaoPorCategoria(mk);
   h += `<div class="card section"><div class="card-h"><div class="chips">${['Todos',...cards].map(c=>`<button class="chip" data-filtro="${esc(c)}" aria-pressed="${f===c}">${esc(c)}</button>`).join('')}</div><div class="actions"><button class="btn sm ghost" data-act="cartoes">Meus cartões</button><button class="btn sm" data-act="importar-extrato">Importar fatura</button></div></div>
-    ${list.length?`<div class="rows">${list.map(c=>`<div class="row">${dBox(c.data)}<div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">${esc(c.cartao)}${c.guardado?' · <span style="color:#1f3f8f;font-weight:600">guardado</span>':''}${c.parcela?' · <span class="pill warn" style="padding:1px 7px">'+esc(c.parcela)+'</span>':''}· <button class="btn sm ghost" style="padding:0 2px;font-size:.78rem;font-weight:500" data-act="compra-cat" data-id="${c.id}" data-mk="${mk}">${c.cat&&CAT[c.cat.split('|')[0]]?`<i class="dot" style="background:${CAT[c.cat.split('|')[0]].c};width:7px;height:7px"></i> ${esc(c.cat.split('|')[1])}`:'+ categoria'}</button></div></div><span class="v">${fmt(c.valor)}</span><button class="iconbtn" aria-label="Apagar ${esc(c.desc)}" data-del-compra="${c.id}">${svg('trash')}</button></div>`).join('')}</div>`:`<div class="empty"><p>Nenhuma compra ${f==='Todos'?'':'no '+esc(f)+' '}em ${mLabel(mk).toLowerCase()}.</p><p class="muted" style="margin:0;font-size:.84rem">Use o botão <b>+</b> para lançar.</p></div>`}
+    ${list.length?`<div class="rows">${list.map(c=>`<div class="row">${dBox(c.data)}<div class="grow"><div class="t">${esc(c.desc)}</div><div class="s">${esc(c.cartao)}${c.guardado?' · <span style="color:#1f3f8f;font-weight:600">guardado</span>':''}${c.parcela?' · <span class="pill warn" style="padding:1px 7px">'+esc(c.parcela)+'</span>':''}· <button class="btn sm ghost" style="padding:0 2px;font-size:.78rem;font-weight:500" data-act="compra-cat" data-id="${c.id}" data-mk="${mk}">${c.cat&&CAT[c.cat.split('|')[0]]?`<i class="dot" style="background:${CAT[c.cat.split('|')[0]].c};width:7px;height:7px"></i> ${esc(c.cat.split('|')[1])}`:'+ categoria'}</button></div></div><span class="v">${fmt(c.valor)}</span><button class="btn sm ${c.guardado?'pri':'ghost'}" data-guardar-compra="${c.id}" data-mk="${mk}" title="Dinheiro desta compra guardado na caixinha do cartão" style="margin-left:6px">${c.guardado?'✓ Guardado':'Guardei'}</button><button class="iconbtn" aria-label="Apagar ${esc(c.desc)}" data-del-compra="${c.id}">${svg('trash')}</button></div>`).join('')}</div>`:`<div class="empty"><p>Nenhuma compra ${f==='Todos'?'':'no '+esc(f)+' '}em ${mLabel(mk).toLowerCase()}.</p><p class="muted" style="margin:0;font-size:.84rem">Use o botão <b>+</b> para lançar.</p></div>`}
   </div>`;
   const ks = monthsAll().filter(k=>S.cartao[k]).slice(-8);
   // recorrentes
@@ -2162,6 +2166,16 @@ function guardarNaCaixinhaCartao(valor,data,obs){
   else q=JSON.parse(JSON.stringify(S.potes[id]));
   const mid=uid('m'); q.movimentos=q.movimentos||[]; q.movimentos.push({id:mid,data,tipo:'aporte',valor,obs}); save('potes',id,q); return {pote:id,mov:mid};
 }
+function toggleGuardarCompra(id,mk){
+  // marca/desmarca que o dinheiro dessa compra está guardado na caixinha do cartão
+  const c=JSON.parse(JSON.stringify(S.cartao[mk]||{})); const x=(c.compras||[]).find(q=>q.id===id); if(!x) return;
+  if(x.guardado){ tirarDaCaixinha(x); delete x.guardado; delete x.cxPote; delete x.cxMov; }
+  else { const r=guardarNaCaixinhaCartao(+x.valor||0,x.data||todayISO(),'Guardado para '+x.desc); x.guardado=true; x.cxPote=r.pote; x.cxMov=r.mov; }
+  save('cartao',mk,c);
+  const pr=(S.cinfo.parcelas||[]).find(p=>p.compraId===id);
+  if(pr) save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.map(p=>p.id===pr.id?{...p,tipo:x.guardado?'guardado':'limite'}:p)});
+  toast(x.guardado?'Marcado como guardado · '+fmt(x.valor)+' na caixinha do cartão':'Desmarcado · valor saiu da caixinha do cartão');
+}
 function tirarDaCaixinha(compra){
   // apagou uma compra marcada como guardada: tira o valor que entrou na caixinha do cartão
   const pid=compra.cxPote||(potesList().find(p=>p.tipo==='cartao')||{}).id; if(!pid||!S.potes[pid]) return;
@@ -3118,6 +3132,7 @@ document.addEventListener('click', e=>{
   const ix = t.closest('[data-incx]'); if(ix){ UI.incluirCx = ix.dataset.incx==='1'; render(); return; }
   const di = t.closest('[data-del-item]'); if(di){ const o=ensureOrc(UI.month); o.itens=o.itens.filter(i=>i.id!==di.dataset.delItem); save('orcamento',UI.month,o); toast('Item apagado'); return; }
   const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
+  const gc = t.closest('[data-guardar-compra]'); if(gc){ if(readonlyView()) return save(); toggleGuardarCompra(gc.dataset.guardarCompra, gc.dataset.mk); return; }
   const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); const del=c.compras.find(x=>x.id===dc.dataset.delCompra); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if(del&&del.guardado) tirarDaCaixinha(del); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
   const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
   const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); const mvd=p.movimentos.find(m=>m.id===dm.dataset.delMov); if(mvd&&mvd.gasto) tirarDoGasto(mvd.gasto); if(mvd&&mvd.receb) tirarRecebido(mvd.receb); tirarEspelho(mvd); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
