@@ -1644,7 +1644,7 @@ function emprPagar(id,valorOutro,destino){
     const restantes=Math.max(0,e.valores.length-i-1);
     e.valores=[...e.valores.slice(0,i),val,...(resto>0.004?parcelasDe(resto,Math.max(1,restantes)):[])]; }
   const data=todayISO(), nTot=e.valores.length, rot=(nTot>1?' · parcela '+(i+1)+'/'+nTot:'');
-  let dest=destino!==undefined?destino:(e.origemPote||''); if(!ehE||!dest||!S.potes[dest]) dest='';
+  let dest=destino!==undefined?destino:(e.origemPote||(e.inicial&&e.inicial.pote)||''); if(!ehE||!dest||!S.potes[dest]) dest='';
   let ref;
   if(!ehE) ref={gasto:lancarNoGasto('fixos',e.desc,val,data,e.desc+rot)};
   else if(!dest) ref={receb:lancarRecebido('Transferência',val,data,(e.quem||e.desc)+' pagou'+rot)};
@@ -3005,7 +3005,7 @@ Object.assign(ACT,{
   'editar-bem'(d){ bemForm(d.id); },
   'novo-empr'(d){ emprForm(null,d&&d.tipo); },
   'empr-outro'(d){ const e=emprList().find(x=>x.id===d.id); if(!e) return; const ehE=emprTipo(e)==='emprestei';
-    form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true},...(ehE?[{name:'dest',label:'Onde entrou',type:'select',options:[['','Minha conta (Renda do mês)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,'Caixinha: '+p.nome])],value:e.origemPote||''}]:[])],
+    form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true},...(ehE?[{name:'dest',label:'Onde entrou',type:'select',options:[['','Minha conta (Renda do mês)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,'Caixinha: '+p.nome])],value:e.origemPote||(e.inicial&&e.inicial.pote)||''}]:[])],
       extra:`<p class="note" style="margin-top:-4px">Falta ${fmt(sum(e.valores.slice(emprPago(e))))}. O que sobrar é dividido nas próximas parcelas.</p>`,
       onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; emprPagar(d.id,val,ehE?v.dest:undefined); }}); },
   'editar-empr'(d){ emprForm(d.id); },
