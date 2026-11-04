@@ -859,7 +859,19 @@ function vGastos(){
   // histórico
   const ks = Object.keys(S.orc).sort().slice(-8);
   const ser = CATS.map(c=>({name:c.n,color:c.c,values:ks.map(k=>orcTotals(S.orc[k]).byCat[c.k]?.real||0)}));
-  h += `<div class="card section"><div class="card-h"><div><h2>Composição do gasto por mês</h2><p>Valor real de cada categoria</p></div></div>${barChart({labels:ks.map(mShort),series:ser,stacked:true,h:230})}${legend(ser)}</div>`;
+  const ks6=Object.keys(S.orc).sort().slice(-6);
+  const tots6=ks6.map(k=>orcTotals(S.orc[k]));
+  const usedC=CATS.filter(c=>tots6.some(t=>(t.byCat[c.k]?.real||0)>0));
+  const nM=ks6.length||1;
+  const avgC=c=>sum(tots6,t=>t.byCat[c.k]?.real||0)/nM;
+  const avgT=sum(tots6,t=>t.desp)/nM;
+  const cellC=(t,c)=>{ const b=t.byCat[c.k]||{prev:0,real:0}; const over=b.prev>0 && b.real>b.prev; return `<td class="r ${over?'neg':''}" title="${b.prev?'Previsto '+esc(fmt(b.prev)):''}">${b.real?fmt(b.real):'<span class="muted">—</span>'}</td>`; };
+  h += `<div class="card section"><div class="card-h"><div><h2>Gasto por categoria</h2><p>Últimos ${nM} ${nM===1?'mês':'meses'} · em vermelho, onde passou do previsto naquele mês</p></div></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Categoria</th>${ks6.map(k=>`<th class="r">${mShort(k)}</th>`).join('')}<th class="r">Média</th></tr></thead>
+    <tbody>${usedC.map(c=>`<tr><td><i class="dot" style="background:${c.c}"></i> ${esc(c.n)}</td>${tots6.map(t=>cellC(t,c)).join('')}<td class="r muted">${fmt(avgC(c))}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>Total real</td>${tots6.map(t=>`<td class="r"><b>${fmt(t.desp)}</b></td>`).join('')}<td class="r"><b>${fmt(avgT)}</b></td></tr>
+    <tr><td class="muted">Previsto</td>${tots6.map(t=>`<td class="r muted">${fmt(t.despPrev)}</td>`).join('')}<td></td></tr>
+    <tr><td class="muted">Sobrou</td>${tots6.map(t=>`<td class="r ${t.saldo<0?'neg':'pos'}">${fmt(t.saldo)}</td>`).join('')}<td></td></tr></tfoot></table></div></div>`;
   h += `<div class="actions section" style="justify-content:flex-end"><button class="btn ghost danger" data-act="apagar-mes">Apagar ${mLabel(mk).toLowerCase()}</button></div>`;
   return h;
 }
@@ -1178,7 +1190,7 @@ function vParcelas(){
   if(fim.length) h += `<div class="card section"><div class="card-h"><div><h2>Já quitadas</h2></div></div><div class="rows">${fim.map(p=>`<div class="row"><div class="grow"><div class="t">${esc(p.desc)}</div><div class="s">${esc(p.cartao)} · ${p.valores.length}x · total ${fmt(sum(p.valores))}</div></div><button class="btn sm ghost" data-act="editar-parcela" data-id="${p.id}">Editar</button></div>`).join('')}</div></div>`;
   return h;
 }
-const contaGuardada = c => c.guardado!==false;
+const contaGuardada = c => !!contaGuardadaNoCiclo(c); // só conta como guardada no ciclo atual, quando você marca
 function catNome(v){ if(!v) return ''; const [k,n]=v.split('|'); return CAT[k]?CAT[k].n+' › '+n:''; }
 function vContasCartao(){
   const todas=S.cinfo.contas||[];
@@ -1195,12 +1207,12 @@ function vContasCartao(){
     : `<div class="card" style="background:var(--gold-soft);border:0;box-shadow:none;margin-bottom:14px"><p style="margin:0;font-size:.92rem">Contas fixas que caem <b>todo mês no cartão</b>, sem dinheiro separado antes. Elas entram na fatura e aparecem em <b>Gastos do mês</b>, na categoria que você escolher, com o cartão onde são pagas.</p></div>`;
   // compras avulsas marcadas "guardei na caixinha" que caem na fatura aberta de cada cartão
   const cg = aba==='guardado' ? comprasGuardadasAbertas().filter(x=>!cs.some(c=>c.cartao===x.cartao&&semAcento(c.desc)===semAcento(x.desc))) : [];
-  if(aba==='guardado' && (cs.length||cg.length)){ const ciclos=[...new Set([...cs.map(cicloConta),...cg.map(x=>x.F)])].sort(); const feitas=cs.filter(contaGuardadaNoCiclo), falta=cs.filter(c=>!contaGuardadaNoCiclo(c));
+  if(cs.length||cg.length){ const ciclos=[...new Set([...cs.map(cicloConta),...cg.map(x=>x.F)])].sort(); const feitas=cs.filter(contaGuardadaNoCiclo), falta=cs.filter(c=>!contaGuardadaNoCiclo(c));
     const vF=sum(feitas,c=>c.valor)+sum(cg,x=>x.valor), vT=sum(cs,c=>c.valor)+sum(cg,x=>x.valor);
     h += `<div class="card" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap"><div><div class="lbl" style="font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600">Para a fatura de ${ciclos.map(m=>MESES[+m.slice(5)-1].toLowerCase()).join(' / ')}</div>
       <div style="font-family:var(--display);font-size:1.4rem;font-weight:700;margin-top:4px">${fmt(vF)} <span class="muted" style="font-size:.9rem;font-weight:500">guardado de ${fmt(vT)}</span></div>
       <div style="font-size:.86rem;margin-top:2px">${falta.length?`<span class="neg">Falta guardar ${fmt(vT-vF)}</span> · ${falta.map(c=>esc(c.desc)).join(', ')}`:'<span class="pos">Tudo guardado ✓</span>'}</div></div>
-      ${falta.length?`<button class="btn pri" data-guardar-todas="1">Guardei tudo o que falta · ${fmt(vT-vF)}</button>`:''}</div>`; }
+      </div>`; }
   h += `<div class="grid g3"><div class="card stat hero"><div class="lbl">${aba==='guardado'?'Guardado rendendo por mês':'Caem no cartão por mês'}</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length} ${cs.length===1?'conta':'contas'}</div></div>${cards.slice(0,2).map(c=>`<div class="card stat"><div class="lbl">${c==='MP'?'Mercado Pago':esc(c)}</div><div class="val sm">${fmt(sum(cs.filter(x=>x.cartao===c),x=>x.valor))}</div><div class="ft">${cs.filter(x=>x.cartao===c).map(x=>esc(x.desc)).join(', ')}</div></div>`).join('')}</div>`;
   h += `<div class="card section"><div class="card-h"><div><h2>${aba==='guardado'?'Contas com o dinheiro guardado':'Contas fixas no cartão'}</h2><p>Valor que cai todo mês no cartão</p></div>${aba==='guardado'&&cx?`<button class="btn sm ghost" data-ctab="caixinha">Ver caixinha do cartão · ${fmt(potSaldo(cx))}</button>`:''}</div>
   ${cs.length?`<div class="rows">${cs.map(c=>`<div class="row"><i class="dot" style="background:${CARD_COLOR(c.cartao)}"></i><div class="grow"><div class="t">${esc(c.desc)}</div><div class="s"><span class="emo">💳</span> ${c.cartao==='MP'?'Mercado Pago':esc(c.cartao)} · todo mês${contaGuardada(c)?' · <span class="pos">guardado rendendo</span>':''}${c.cat?' · '+esc(catNome(c.cat)):''}${c.parcelaId?' · também em Parcelas':''}</div></div><span class="v">${fmt(c.valor)}</span>${aba==='guardado'?(contaGuardadaNoCiclo(c)?`<span class="pill good" title="Guardado para a fatura de ${MESES[+cicloConta(c).slice(5)-1].toLowerCase()}">✓ guardado</span><button class="iconbtn" data-desguardar="${c.id}" aria-label="Desfazer" title="Desfazer (tira da caixinha)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`:`<button class="btn sm pri" data-guardar="${c.id}">Guardei</button>`):''}<button class="btn sm ghost" data-act="editar-conta" data-id="${c.id}">Editar</button></div>`).join('')}</div>`:`<p class="muted">Nenhuma conta aqui ainda. Toque no <b>+</b>, marque <b>🔁 Conta recorrente</b> e escolha o cartão.</p>`}
