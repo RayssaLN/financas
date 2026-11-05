@@ -1696,7 +1696,7 @@ function vProjetos(){
   let h=head('Dia a dia','Projetos','Quanto você gastou em uma reforma, viagem ou outro objetivo. Só acompanha: não mexe na caixinha, no saldo nem no orçamento.', ro?'':`<button class="btn pri" data-act="novo-projeto">${svg('plus')}Novo projeto</button>`);
   if(!L.length) return h+`<div class="card empty"><h3>Nenhum projeto ainda</h3><p>Crie um projeto, como "Reforma". Depois, ao lançar um gasto, escolha o projeto nele.</p></div>`;
   h+=L.map(p=>{ const its=projGastos(p.id), tot=sum(its,x=>x.valor), meta=+p.meta||0, falta=r2(meta-tot), pct=meta?Math.min(100,tot/meta*100):0;
-    return `<div class="card section"><div class="card-h"><div><h2>${esc(p.nome)}</h2><p>${its.length} ${its.length===1?'gasto':'gastos'}${meta?' · meta '+fmt(meta):' · sem meta'}</p></div>${ro?'':`<button class="btn sm ghost" data-act="editar-projeto" data-id="${p.id}">Editar</button>`}</div>
+    return `<div class="card section"><div class="card-h"><div><h2>${esc(p.nome)}</h2><p>${its.length} ${its.length===1?'gasto':'gastos'}${meta?' · meta '+fmt(meta):' · sem meta'}</p></div>${ro?'':`<span class="actions">${ro?'':`<button class="btn sm pri" data-act="proj-gasto" data-id="${p.id}">${svg('plus')}Gasto</button><button class="btn sm ghost" data-act="editar-projeto" data-id="${p.id}">Editar</button>`}</span></div>
       <div class="grid g3" style="gap:10px"><div class="stat hero"><div class="lbl">Gasto até agora</div><div class="val">${fmt(tot)}</div></div>${meta?`<div class="stat"><div class="lbl">${falta>=0?'Falta da meta':'Passou da meta em'}</div><div class="val sm ${falta<0?'neg':''}">${fmt(Math.abs(falta))}</div></div>`:''}</div>
       ${meta?`<div class="alloc" style="height:10px;margin:12px 0"><i style="width:${pct}%;background:${tot>meta?'var(--bad)':'var(--accent)'}"></i></div>`:''}
       ${its.length?`<div class="rows" style="margin-top:8px">${its.map(x=>`<div class="row" style="padding:7px 0">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.desc)}</div><div class="s">${esc(x.via)}</div></div><span class="v">${fmt(x.valor)}</span></div>`).join('')}</div>`:'<p class="muted">Nenhum gasto ainda. Ao lançar um gasto, escolha este projeto.</p>'}
@@ -1897,9 +1897,9 @@ function openPote(id){
   const TP={aporte:['Aporte','pos','+'],resgate:['Resgate','neg','−'],rendimento:['Rendimento','pos','+'],ajuste:['Ajuste de saldo','','']};
   modal(`<h3><i class="dot" style="background:${esc(p.cor)};width:12px;height:12px"></i> ${esc(p.nome)}</h3>
     <div class="grid g3" style="gap:10px;margin-bottom:14px"><div class="stat"><div class="lbl">Saldo</div><div class="val sm">${fmt(s)}</div></div><div class="stat"><div class="lbl">Aportado</div><div class="val sm">${fmt(potAportado(p))}</div></div><div class="stat"><div class="lbl">Rendeu</div><div class="val sm pos">${fmt(potRend(p))}</div></div></div>
+    ${ativosHtml(id,p)}
     <div class="actions" style="margin-bottom:12px"><button class="btn pri sm" data-act="novo-mov" data-pote="${id}">${svg('plus')}Movimentar</button><button class="btn sm" data-act="atualizar-saldo" data-pote="${id}">Atualizar saldo</button><button class="btn sm ghost" data-act="editar-pote" data-pote="${id}">Editar</button></div>
     ${assinaturaHtml(id,p)}
-    ${ativosHtml(id,p)}
     <h3 style="font-size:1rem;margin:16px 0 6px">Movimentações</h3>
     <div class="rows">${movs.map(m=>`<div class="row">${dBox(m.data)}<div class="grow"><div class="t">${TP[m.tipo][0]}</div>${m.obs?`<div class="s">${esc(m.obs)}</div>`:''}</div><span class="v ${m.valor<0?'neg':TP[m.tipo][1]}">${m.valor<0?'':TP[m.tipo][2]}${fmt(m.valor)}</span><button class="iconbtn" aria-label="Apagar movimentação" data-del-mov="${m.id}" data-pote="${id}">${svg('trash')}</button></div>`).join('')||'<p class="muted">Sem movimentações.</p>'}</div>
     <div class="foot"><button class="btn" data-close>Fechar</button></div>`, true);
@@ -3080,6 +3080,7 @@ Object.assign(ACT,{
   'novo-empr'(d){ emprForm(null,d&&d.tipo); },
   'novo-projeto'(){ projForm(null); },
   'editar-projeto'(d){ projForm(d.id); },
+  'proj-gasto'(d){ gastoRapido({projeto:d.id}); },
   'empr-outro'(d){ const e=emprList().find(x=>x.id===d.id); if(!e) return; const ehE=emprTipo(e)==='emprestei';
     form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true,value:(()=>{const pg=(e.pagamentos||[]).length; return e.valores[pg]!=null?r2(e.valores[pg]).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';})()},...(ehE?[{name:'dest',label:'Onde entrou',type:'select',options:[['','Minha conta (Renda do mês)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,(p.id===(e.origemPote||(e.inicial&&e.inicial.pote))?'De onde saiu: ':'Caixinha: ')+p.nome])],value:e.origemPote||(e.inicial&&e.inicial.pote)||''}]:[])],
       extra:`<p class="note" style="margin-top:-4px">Falta ${fmt(sum(e.valores.slice(emprPago(e))))}. O que sobrar é dividido nas próximas parcelas.</p>`,
