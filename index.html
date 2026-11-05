@@ -714,7 +714,8 @@ function potSaldo(p){ return sum(p.movimentos||[], m=> m.tipo==='resgate' ? -m.v
 function contaCorretora(){ const ps=potesList(); return ps.find(p=>p.id===S.config.contaCorretoraId) || ps.find(p=>p.tipo==='investimento'&&p.classe==='Outros'&&/conta/i.test(p.nome)) || ps.find(p=>p.tipo==='investimento'&&p.classe==='Outros'); }
 function movConta(tipo,valor,data,obs){ const c=contaCorretora(); if(!c) return null; const q=JSON.parse(JSON.stringify(S.potes[c.id])); q.movimentos=q.movimentos||[]; const id=uid('m'); q.movimentos.push({id,data,tipo,valor:r2(valor),obs}); S.potes[c.id]=q; save('potes',c.id,q); return {pote:c.id,mov:id}; }
 function tirarMovConta(ref){ if(!ref||!S.potes[ref.pote]) return; const q=JSON.parse(JSON.stringify(S.potes[ref.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==ref.mov); save('potes',ref.pote,q); }
-function potAportado(p){ return sum((p.movimentos||[]).filter(m=>m.tipo==='aporte'),m=>m.valor) - sum((p.movimentos||[]).filter(m=>m.tipo==='resgate'),m=>m.valor); }
+function ehComPosicao(p){ return p.tipo==='investimento' && ((p.posicao&&p.posicao.length)||(p.compras||[]).length); }
+function potAportado(p){ if(ehComPosicao(p)) return r2(sum(posicaoDe(p),x=>x.q*x.pm)); return sum((p.movimentos||[]).filter(m=>m.tipo==='aporte'),m=>m.valor) - sum((p.movimentos||[]).filter(m=>m.tipo==='resgate'),m=>m.valor); }
 function potRend(p){ return sum((p.movimentos||[]).filter(m=>m.tipo==='rendimento'),m=>m.valor); }
 function potesList(tipo){ return Object.entries(S.potes).map(([id,p])=>({id,...p})).filter(p=>!tipo||p.tipo===tipo).sort((a,b)=>(a.ordem??99)-(b.ordem??99)||a.nome.localeCompare(b.nome)); }
 function custoMedio(){ return +S.config.custoMensal>0 ? +S.config.custoMensal : mediaGastos(); }
@@ -1344,7 +1345,7 @@ function vInvest(){
   // a conta da corretora (Conta Clear) é saldo parado, não investimento: aparece só em Análise da carteira
   const cc=contaCorretora(); const inv = potesList('investimento').filter(p=>!cc||p.id!==cc.id);
   let h = head('Investir','Investimentos','Corretora, cripto, renda fixa, exterior e o que mais você tiver', `<button class="btn" data-act="comprar-ativo">${svg('plus')}Comprar / vender ativo</button><button class="btn pri" data-act="novo-pote" data-tipo="investimento">${svg('plus')}Novo investimento</button>`);
-  const investido=p=>potAportado(p)+sum((p.movimentos||[]).filter(m=>m.tipo==='ajuste'),m=>m.valor);
+  const investido=p=>ehComPosicao(p)?potAportado(p):potAportado(p)+sum((p.movimentos||[]).filter(m=>m.tipo==='ajuste'),m=>m.valor);
   const tot=sum(inv,potSaldo), ap=sum(inv,investido), rd=sum(inv,potRend);
   const provAno=sum((S.prov.itens||[]).filter(x=>x.data.startsWith(thisMonth().slice(0,4))),x=>x.valor);
   h += `<div class="grid g3"><div class="card stat hero"><div class="lbl">Saldo investido</div><div class="val">${fmt(tot)}</div><div class="ft">${inv.length} investimentos</div></div><div class="card stat"><div class="lbl">Rendimentos lançados</div><div class="val sm ${rd>=0?'pos':'neg'}">${rd>=0?'+':''}${fmt(rd)}</div><div class="ft">Pelo "Atualizar saldo"</div></div><div class="card stat"><div class="lbl">Proventos em ${thisMonth().slice(0,4)}</div><div class="val sm pos">+${fmt(provAno)}</div><div class="ft"><button class="btn sm ghost" style="padding:0" data-go="rendimentos">Ver proventos →</button></div></div></div>`;
