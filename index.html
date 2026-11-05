@@ -1353,8 +1353,7 @@ function vInvest(){
     ${inv.map(p=>{const s=potSaldo(p),a=investido(p),r=potRend(p); return `<tr><td><button class="btn ghost sm" style="padding-left:0" data-pote="${p.id}"><i class="dot" style="background:${esc(p.cor)}"></i>${esc(p.nome)}</button>${p.instituicao?`<div class="muted" style="font-size:.75rem">${esc(p.instituicao)}</div>`:''}</td><td><span class="pill">${esc(p.classe)}</span></td><td class="r">${fmt(a)}</td><td class="r"><b>${fmt(s)}</b></td><td class="r ${r>=0?'pos':'neg'}">${r>=0?'+':''}${fmt(r)}${a?` <span class="muted">(${pct(r/a)})</span>`:''}</td><td class="r"><button class="btn sm" data-act="atualizar-saldo" data-pote="${p.id}">Atualizar saldo</button></td></tr>`;}).join('') || `<tr><td colspan="6" class="muted">Nenhum investimento ainda.</td></tr>`}
   </tbody>${inv.length?`<tfoot><tr><td colspan="2">Total</td><td class="r">${fmt(ap)}</td><td class="r">${fmt(tot)}</td><td class="r ${rd>=0?'pos':'neg'}">${rd>=0?'+':''}${fmt(rd)}</td><td></td></tr></tfoot>`:''}</table></div>
   <p class="note">Clique no nome de um investimento para ver os ativos e as compras. Para registrar quanto rendeu, use "Atualizar saldo" com o valor da corretora: o app calcula o rendimento pela diferença.</p></div>`;
-  const posAt=[]; inv.forEach(p=>{ const by={}; (p.compras||[]).forEach(c=>{ const b=by[c.ativo]||(by[c.ativo]={q:0,vc:0,qc:0}); const venda=c.obs==='VENDA'; b.q+=venda?-c.quant:c.quant; if(!venda){ b.vc+=c.valor; b.qc+=c.quant; } });
-    Object.entries(by).filter(([k,b])=>b.q>0.000001).forEach(([k,b])=>{ const pm=b.qc?b.vc/b.qc:0; posAt.push({ativo:k,pote:p.nome,q:b.q,pm,custo:b.q*pm}); }); });
+  const posAt=[]; inv.forEach(p=>posicaoDe(p).forEach(x=>posAt.push({ativo:x.ativo,pote:p.nome,q:x.q,pm:x.pm,custo:x.q*x.pm})));
   posAt.sort((a,b)=>b.custo-a.custo);
   if(posAt.length) h += `<div class="card section"><div class="card-h"><div><h2>Posição por ativo</h2><p>Quantidade que você tem de cada ativo e o preço médio de compra</p></div></div><div class="tbl-wrap"><table><thead><tr><th>Ativo</th><th>Onde</th><th class="r">Quantidade</th><th class="r">Preço médio</th><th class="r">Custo</th></tr></thead><tbody>${posAt.map(x=>`<tr><td><b>${esc(x.ativo)}</b></td><td class="muted">${esc(x.pote)}</td><td class="r">${fmtQ(x.q)}</td><td class="r">${fmt(x.pm)}</td><td class="r">${fmt(x.custo)}</td></tr>`).join('')}</tbody></table></div></div>`;
   const ms = mesesMov(inv,'aporte',8);
@@ -1708,6 +1707,16 @@ function vProjetos(){
     </div>`; }).join('');
   return h;
 }
+function projGastoForm(pid){
+  const pr=projList().find(x=>x.id===pid); if(!pr) return;
+  form({title:'Gasto em '+pr.nome, submit:'Registrar', fields:[
+    {name:'valor',label:'Valor',type:'money',req:true},
+    {name:'desc',label:'O que foi',req:true},
+    {name:'data',label:'Data',type:'date',value:todayISO()}],
+    onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; const desc=(v.desc||'').trim(); if(!desc) return 'Descreva o gasto';
+      S.config={...S.config,projGastos:[...(S.config.projGastos||[]),{id:uid('pg'),projeto:pid,data:v.data||todayISO(),desc,valor:val,via:'Registro'}]};
+      save('config','geral',S.config); toast(fmt(val)+' registrado em '+pr.nome+' · não mexe no saldo'); }});
+}
 function projForm(id){
   const p=id?projList().find(x=>x.id===id):{nome:'',meta:''};
   form({title:id?'Editar projeto':'Novo projeto', fields:[
@@ -1859,15 +1868,35 @@ function vMeliuz(){
 
 /* ================= pot detail ================= */
 const fmtQ = (q) => (+q).toLocaleString('pt-BR',{maximumFractionDigits: Math.abs(q)<1?8:2});
+function posicaoDe(p){
+  // se você informou a posição, ela vale; senão, calcula pelas compras registradas
+  if(p.posicao&&p.posicao.length) return p.posicao.map(x=>({ativo:x.ativo,q:+x.q||0,pm:+x.pm||0})).filter(x=>x.q>0);
+  const by={}; (p.compras||[]).forEach(c=>{ const b=by[c.ativo]||(by[c.ativo]={q:0,vc:0,qc:0}); const venda=c.obs==='VENDA'; b.q+=venda?-c.quant:c.quant; if(!venda){ b.vc+=c.valor; b.qc+=c.quant; } });
+  return Object.entries(by).filter(([k,b])=>b.q>0.000001).map(([k,b])=>({ativo:k,q:b.q,pm:b.qc?b.vc/b.qc:0}));
+}
+function posicaoForm(pid){
+  const p=S.potes[pid]; if(!p) return; const cur=posicaoDe(p);
+  const txt=cur.map(x=>`${x.ativo} ${fmtQ(x.q)} ${(+x.pm).toFixed(2).replace('.',',')}`).join('\n');
+  modal(`<h3>Posição em ${esc(p.nome)}</h3><p class="sub">Uma linha por ativo, no formato <b>código quantidade preço-médio</b>. Ex.: BBAS3 10 24,10</p>
+    <textarea id="pos-txt" rows="8" style="width:100%;font:inherit;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--surface)">${esc(txt)}</textarea>
+    <div class="foot"><button class="btn ghost" data-close>Cancelar</button><button class="btn pri" id="pos-save">Salvar posição</button></div>`);
+  document.getElementById('pos-save').addEventListener('click',()=>{
+    const out=[];
+    for(const l of document.getElementById('pos-txt').value.split('\n').map(x=>x.trim()).filter(Boolean)){
+      const parts=l.split(/[\s;]+/); const ativo=(parts[0]||'').toUpperCase(), q=parseNum(parts[1]), pm=parseNum(parts[2]||'0');
+      if(!ativo||!(q>0)){ toast('Linha inválida: '+l); return; }
+      out.push({id:uid('pz'),ativo,q,pm:pm||0}); }
+    const q2=JSON.parse(JSON.stringify(S.potes[pid])); q2.posicao=out; save('potes',pid,q2); closeModal(); toast('Posição salva'); render(); });
+}
 function ativosHtml(id,p){
   if(p.tipo!=='investimento') return '';
-  const cs=p.compras||[]; if(!cs.length && !['Ações','FIIs','Cripto','Exterior'].includes(p.classe)) return '';
-  const by={}; cs.forEach(c=>{ const k=c.ativo; const b=by[k]||(by[k]={q:0,vc:0,qc:0,n:0}); const venda=c.obs==='VENDA'; b.q+= venda?-c.quant:c.quant; if(!venda){ b.vc+=c.valor; b.qc+=c.quant; } b.n++; });
-  const rows=Object.entries(by).filter(([k,b])=>b.q>0).sort((a,b)=>b[1].vc-a[1].vc);
+  const cs=p.compras||[], pos=posicaoDe(p);
+  if(!cs.length && !pos.length && !['Ações','FIIs','Cripto','Exterior'].includes(p.classe)) return '';
+  const rows=[...pos].sort((x,y)=>y.q*y.pm-x.q*x.pm);
   return `<div class="card" style="background:var(--surface-2);border:0;box-shadow:none;margin-bottom:6px">
-    <div class="card-h" style="margin-bottom:8px"><div><h2>Ativos</h2><p>Compras registradas${cs.length?' desde '+cs.map(c=>c.data).sort()[0].split('-').reverse().join('/'):''}</p></div><button class="btn pri sm" data-act="nova-compra-ativo" data-pote="${id}">${svg('plus')}Compra ou venda</button></div>
-    ${rows.length?`<div class="tbl-wrap"><table><thead><tr><th>Ativo</th><th class="r">Quantidade</th><th class="r">Preço médio</th><th class="r">Investido</th></tr></thead><tbody>${rows.map(([k,b])=>`<tr><td><b>${esc(k)}</b></td><td class="r">${fmtQ(b.q)}</td><td class="r">${b.qc?fmt(b.vc/b.qc):'—'}</td><td class="r">${fmt(b.vc)}</td></tr>`).join('')}</tbody></table></div>
-    <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.84rem;font-weight:600;color:var(--ink-2)">Ver todas as compras (${cs.length})</summary><div class="rows" style="margin-top:6px">${[...cs].map((c,i)=>({...c,i})).sort((a,b)=>b.data.localeCompare(a.data)).map(c=>`<div class="row" style="padding:7px 0;font-size:.86rem">${dBox(c.data)}<div class="grow"><div class="t">${c.obs==='VENDA'?'Venda':'Compra'} · ${esc(c.ativo)}</div><div class="s">${fmtQ(c.quant)} × ${fmt(c.unit)}${c.obs&&c.obs!=='VENDA'?' · '+esc(c.obs):''}</div></div><span class="v ${c.obs==='VENDA'?'neg':''}">${fmt(c.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-compra-ativo="${c.i}" data-pote="${id}">${svg('trash')}</button></div>`).join('')}</div></details>`:'<p class="muted" style="margin:0">Nenhuma compra registrada ainda.</p>'}
+    <div class="card-h" style="margin-bottom:8px"><div><h2>Ativos</h2><p>${p.posicao&&p.posicao.length?'Posição que você informou':'Calculada pelas compras registradas'}</p></div><div class="actions"><button class="btn sm" data-act="posicao-form" data-pote="${id}">Editar posição</button><button class="btn pri sm" data-act="nova-compra-ativo" data-pote="${id}">${svg('plus')}Compra ou venda</button></div></div>
+    ${rows.length?`<div class="tbl-wrap"><table><thead><tr><th>Ativo</th><th class="r">Quantidade</th><th class="r">Preço médio</th><th class="r">Investido</th></tr></thead><tbody>${rows.map(x=>`<tr><td><b>${esc(x.ativo)}</b></td><td class="r">${fmtQ(x.q)}</td><td class="r">${fmt(x.pm)}</td><td class="r">${fmt(x.q*x.pm)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="muted" style="margin:0">Nenhum ativo ainda. Toque em "Editar posição" e informe quanto tem de cada um.</p>'}
+    ${cs.length?`<details style="margin-top:8px"><summary style="cursor:pointer;font-size:.84rem;font-weight:600;color:var(--ink-2)">Ver todas as compras (${cs.length})</summary><div class="rows" style="margin-top:6px">${[...cs].map((c,i)=>({...c,i})).sort((x,y)=>y.data.localeCompare(x.data)).map(c=>`<div class="row" style="padding:7px 0;font-size:.86rem">${dBox(c.data)}<div class="grow"><div class="t">${c.obs==='VENDA'?'Venda':'Compra'} · ${esc(c.ativo)}</div><div class="s">${fmtQ(c.quant)} × ${fmt(c.unit)}${c.obs&&c.obs!=='VENDA'?' · '+esc(c.obs):''}</div></div><span class="v ${c.obs==='VENDA'?'neg':''}">${fmt(c.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-compra-ativo="${c.i}" data-pote="${id}">${svg('trash')}</button></div>`).join('')}</div></details>`:''}
   </div>`;
 }
 
@@ -3088,7 +3117,8 @@ Object.assign(ACT,{
   'novo-empr'(d){ emprForm(null,d&&d.tipo); },
   'novo-projeto'(){ projForm(null); },
   'editar-projeto'(d){ projForm(d.id); },
-  'proj-gasto'(d){ gastoRapido({projeto:d.id}); },
+  'proj-gasto'(d){ projGastoForm(d.id); },
+  'posicao-form'(d){ posicaoForm(d.pote); },
   'empr-outro'(d){ const e=emprList().find(x=>x.id===d.id); if(!e) return; const ehE=emprTipo(e)==='emprestei';
     form({title:(ehE?'Quanto recebeu de ':'Quanto pagou de ')+(e.quem||e.desc), fields:[{name:'valor',label:'Valor',type:'money',req:true,value:(()=>{const pg=(e.pagamentos||[]).length; return e.valores[pg]!=null?r2(e.valores[pg]).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';})()},...(ehE?[{name:'dest',label:'Onde entrou',type:'select',options:[['','Minha conta (Renda do mês)'],...potesList().filter(p=>p.tipo!=='cartao').map(p=>[p.id,(p.id===(e.origemPote||(e.inicial&&e.inicial.pote))?'De onde saiu: ':'Caixinha: ')+p.nome])],value:e.origemPote||(e.inicial&&e.inicial.pote)||''}]:[])],
       extra:`<p class="note" style="margin-top:-4px">Falta ${fmt(sum(e.valores.slice(emprPago(e))))}. O que sobrar é dividido nas próximas parcelas.</p>`,
