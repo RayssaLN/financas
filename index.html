@@ -717,6 +717,8 @@ function tirarMovConta(ref){ if(!ref||!S.potes[ref.pote]) return; const q=JSON.p
 function ehComPosicao(p){ return p.tipo==='investimento' && ((p.posicao&&p.posicao.length)||(p.compras||[]).length); }
 function potAportado(p){ if(ehComPosicao(p)) return r2(sum(posicaoDe(p),x=>x.q*x.pm)); return sum((p.movimentos||[]).filter(m=>m.tipo==='aporte'),m=>m.valor) - sum((p.movimentos||[]).filter(m=>m.tipo==='resgate'),m=>m.valor); }
 function potRend(p){ return sum((p.movimentos||[]).filter(m=>m.tipo==='rendimento'),m=>m.valor); }
+// no investimento com posição: rendeu = saldo atual − custo das posições
+function potGanho(p){ return ehComPosicao(p) ? r2(potSaldo(p)-potAportado(p)) : potRend(p); }
 function potesList(tipo){ return Object.entries(S.potes).map(([id,p])=>({id,...p})).filter(p=>!tipo||p.tipo===tipo).sort((a,b)=>(a.ordem??99)-(b.ordem??99)||a.nome.localeCompare(b.nome)); }
 function custoMedio(){ return +S.config.custoMensal>0 ? +S.config.custoMensal : mediaGastos(); }
 function mediaGastos(){
@@ -1346,12 +1348,12 @@ function vInvest(){
   const cc=contaCorretora(); const inv = potesList('investimento').filter(p=>!cc||p.id!==cc.id);
   let h = head('Investir','Investimentos','Corretora, cripto, renda fixa, exterior e o que mais você tiver', `<button class="btn" data-act="comprar-ativo">${svg('plus')}Comprar / vender ativo</button><button class="btn pri" data-act="novo-pote" data-tipo="investimento">${svg('plus')}Novo investimento</button>`);
   const investido=p=>ehComPosicao(p)?potAportado(p):potAportado(p)+sum((p.movimentos||[]).filter(m=>m.tipo==='ajuste'),m=>m.valor);
-  const tot=sum(inv,potSaldo), ap=sum(inv,investido), rd=sum(inv,potRend);
+  const tot=sum(inv,potSaldo), ap=sum(inv,investido), rd=sum(inv,potGanho);
   const provAno=sum((S.prov.itens||[]).filter(x=>x.data.startsWith(thisMonth().slice(0,4))),x=>x.valor);
   h += `<div class="grid g3"><div class="card stat hero"><div class="lbl">Saldo investido</div><div class="val">${fmt(tot)}</div><div class="ft">${inv.length} investimentos</div></div><div class="card stat"><div class="lbl">Rendimentos lançados</div><div class="val sm ${rd>=0?'pos':'neg'}">${rd>=0?'+':''}${fmt(rd)}</div><div class="ft">Pelo "Atualizar saldo"</div></div><div class="card stat"><div class="lbl">Proventos em ${thisMonth().slice(0,4)}</div><div class="val sm pos">+${fmt(provAno)}</div><div class="ft"><button class="btn sm ghost" style="padding:0" data-go="rendimentos">Ver proventos →</button></div></div></div>`;
   const classes = [...new Set(inv.map(p=>p.classe||'Outros'))];
   h += `<div class="card section"><div class="tbl-wrap"><table><thead><tr><th>Investimento</th><th>Classe</th><th class="r">Investido</th><th class="r">Saldo atual</th><th class="r">Rendeu</th><th></th></tr></thead><tbody>
-    ${inv.map(p=>{const s=potSaldo(p),a=investido(p),r=potRend(p); return `<tr><td><button class="btn ghost sm" style="padding-left:0" data-pote="${p.id}"><i class="dot" style="background:${esc(p.cor)}"></i>${esc(p.nome)}</button>${p.instituicao?`<div class="muted" style="font-size:.75rem">${esc(p.instituicao)}</div>`:''}</td><td><span class="pill">${esc(p.classe)}</span></td><td class="r">${fmt(a)}</td><td class="r"><b>${fmt(s)}</b></td><td class="r ${r>=0?'pos':'neg'}">${r>=0?'+':''}${fmt(r)}${a?` <span class="muted">(${pct(r/a)})</span>`:''}</td><td class="r"><button class="btn sm" data-act="atualizar-saldo" data-pote="${p.id}">Atualizar saldo</button></td></tr>`;}).join('') || `<tr><td colspan="6" class="muted">Nenhum investimento ainda.</td></tr>`}
+    ${inv.map(p=>{const s=potSaldo(p),a=investido(p),r=potGanho(p); return `<tr><td><button class="btn ghost sm" style="padding-left:0" data-pote="${p.id}"><i class="dot" style="background:${esc(p.cor)}"></i>${esc(p.nome)}</button>${p.instituicao?`<div class="muted" style="font-size:.75rem">${esc(p.instituicao)}</div>`:''}</td><td><span class="pill">${esc(p.classe)}</span></td><td class="r">${fmt(a)}</td><td class="r"><b>${fmt(s)}</b></td><td class="r ${r>=0?'pos':'neg'}">${r>=0?'+':''}${fmt(r)}${a?` <span class="muted">(${pct(r/a)})</span>`:''}</td><td class="r"><button class="btn sm" data-act="atualizar-saldo" data-pote="${p.id}">Atualizar saldo</button></td></tr>`;}).join('') || `<tr><td colspan="6" class="muted">Nenhum investimento ainda.</td></tr>`}
   </tbody>${inv.length?`<tfoot><tr><td colspan="2">Total</td><td class="r">${fmt(ap)}</td><td class="r">${fmt(tot)}</td><td class="r ${rd>=0?'pos':'neg'}">${rd>=0?'+':''}${fmt(rd)}</td><td></td></tr></tfoot>`:''}</table></div>
   <p class="note">Clique no nome de um investimento para ver os ativos e as compras. Para registrar quanto rendeu, use "Atualizar saldo" com o valor da corretora: o app calcula o rendimento pela diferença.</p></div>`;
   const posAt=[]; inv.forEach(p=>posicaoDe(p).forEach(x=>posAt.push({ativo:x.ativo,pote:p.nome,q:x.q,pm:x.pm,custo:x.q*x.pm})));
@@ -1931,7 +1933,7 @@ function openPote(id){
   const s=potSaldo(p);
   const TP={aporte:['Aporte','pos','+'],resgate:['Resgate','neg','−'],rendimento:['Rendimento','pos','+'],ajuste:['Ajuste de saldo','','']};
   modal(`<h3><i class="dot" style="background:${esc(p.cor)};width:12px;height:12px"></i> ${esc(p.nome)}</h3>
-    <div class="grid g3" style="gap:10px;margin-bottom:14px"><div class="stat"><div class="lbl">Saldo</div><div class="val sm">${fmt(s)}</div></div><div class="stat"><div class="lbl">Aportado</div><div class="val sm">${fmt(potAportado(p))}</div></div><div class="stat"><div class="lbl">Rendeu</div><div class="val sm pos">${fmt(potRend(p))}</div></div></div>
+    <div class="grid g3" style="gap:10px;margin-bottom:14px"><div class="stat"><div class="lbl">Saldo</div><div class="val sm">${fmt(s)}</div></div><div class="stat"><div class="lbl">Aportado</div><div class="val sm">${fmt(potAportado(p))}</div></div><div class="stat"><div class="lbl">Rendeu</div><div class="val sm ${potGanho(p)<0?'neg':'pos'}">${fmt(potGanho(p))}</div></div></div>
     ${ativosHtml(id,p)}
     <div class="actions" style="margin-bottom:12px"><button class="btn pri sm" data-act="novo-mov" data-pote="${id}">${svg('plus')}Movimentar</button><button class="btn sm" data-act="atualizar-saldo" data-pote="${id}">Atualizar saldo</button><button class="btn sm ghost" data-act="editar-pote" data-pote="${id}">Editar</button></div>
     ${assinaturaHtml(id,p)}
