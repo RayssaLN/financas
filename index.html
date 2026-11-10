@@ -2113,19 +2113,12 @@ const ACT = {
   },
   'sugerir'(){
     document.getElementById('more').classList.remove('open');
-    modal(`<h3>Sugerir melhoria</h3><p class="sub" style="margin:-6px 0 14px">Conta o que pode melhorar no app. Só a dona do app recebe.</p>
-      <textarea id="sug-txt" rows="6" style="width:100%;font:inherit;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--surface)" placeholder="Ex.: a tela de caixinhas podia mostrar a meta…"></textarea>
-      <div class="actions" style="margin-top:12px"><button class="btn pri" data-act="sugestao-enviar">Enviar</button></div>`);
-  },
-  'sugestao-enviar'(){
-    const el=document.getElementById('sug-txt'); const texto=((el&&el.value)||'').trim();
-    if(!texto){ toast('Escreva a sugestão primeiro'); return; }
-    if(texto.length>2000){ toast('Texto muito longo (máx. 2000)'); return; }
-    try{
-      firebase.firestore().collection('sugestoes').add({ texto, nome:(ME&&ME.nome)||'', tela:UI.view, data:todayISO(), criadoEm:firebase.firestore.FieldValue.serverTimestamp() })
-        .then(()=>{ closeModal(); toast('Sugestão enviada, obrigada!'); })
-        .catch(()=>toast('Não consegui enviar. Confira a internet.'));
-    }catch(e){ toast('Não consegui enviar.'); }
+    form({title:'Sugerir melhoria', submit:'Enviar', fields:[{name:'texto',label:'O que pode melhorar no app?',req:true}],
+      onSubmit:v=>{ const texto=(v.texto||'').trim(); if(!texto) return 'Escreva a sugestão';
+        if(texto.length>2000) return 'Texto muito longo (máximo 2000 letras)';
+        firebase.firestore().collection('sugestoes').add({texto, nome:(ME&&ME.nome)||'', tela:UI.view, data:todayISO(), criadoEm:firebase.firestore.FieldValue.serverTimestamp()})
+          .then(()=>toast('Sugestão enviada, obrigada!')).catch(()=>toast('Não consegui enviar. Confira a internet.'));
+      }});
   },
   'ver-sugestoes'(){
     document.getElementById('more').classList.remove('open');
