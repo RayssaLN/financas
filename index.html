@@ -2117,7 +2117,7 @@ const ACT = {
       onSubmit:v=>{ const texto=(v.texto||'').trim(); if(!texto) return 'Escreva a sugestão';
         if(texto.length>2000) return 'Texto muito longo (máximo 2000 letras)';
         firebase.firestore().collection('sugestoes').add({texto, nome:(ME&&ME.nome)||'', tela:UI.view, data:todayISO(), criadoEm:firebase.firestore.FieldValue.serverTimestamp()})
-          .then(()=>toast('Sugestão enviada, obrigada!')).catch(()=>toast('Não consegui enviar. Confira a internet.'));
+          .then(()=>toast('Sugestão enviada, obrigada!')).catch(e=>toast('Não enviou: '+((e&&(e.code||e.message))||'erro desconhecido')));
       }});
   },
   'ver-sugestoes'(){
