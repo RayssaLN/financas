@@ -1105,7 +1105,21 @@ function projecao(n){
   const by={}; cards.forEach(c=>by[c]=ms.map(m=>composicaoFatura(c,m).tot));
   return {ms,by,cards};
 }
+const SNAP_PENDING=new Set();
 function composicaoFatura(card,F){
+  // faturas de meses já passados ficam congeladas: a primeira vez que são vistas, a composição é guardada e não muda mais
+  F=F||thisMonth();
+  const key=F+'|'+card, passado=F<thisMonth();
+  if(passado){ const sn=((S.cinfo.snap||{})[key]); if(sn) return {it:sn.it,tot:sn.tot}; }
+  const res=composicaoViva(card,F);
+  if(passado && !SNAP_PENDING.has(key) && !((S.cinfo.snap||{})[key])){
+    SNAP_PENDING.add(key);
+    setTimeout(()=>{ SNAP_PENDING.delete(key); if((S.cinfo.snap||{})[key]) return;
+      const ci={...S.cinfo, snap:{...(S.cinfo.snap||{}), [key]:JSON.parse(JSON.stringify({it:res.it, tot:res.tot}))}}; save('cartaoinfo','geral',ci); },0);
+  }
+  return res;
+}
+function composicaoViva(card,F){
   // fatura que vence no mês F = parcelas daquele mês + contas no cartão + compras à vista do mês anterior + estornos
   F=F||thisMonth(); const it=[];
   const fora=((S.cinfo.fora||{})[F])||[];
