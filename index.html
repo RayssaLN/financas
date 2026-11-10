@@ -3074,7 +3074,9 @@ function gastoRapido(pre={}){
 }
 function lerG(){ const v=id=>{ const e=document.getElementById(id); return e?e.value:null; };
   if(v('g-valor')!==null) G.valor=v('g-valor'); if(v('g-desc')!==null) G.desc=v('g-desc'); if(v('g-data')) G.data=v('g-data'); if(v('g-item')) G.item=v('g-item'); }
+function valeCarteiras(){ return (C.fundo&&C.fundo.carteiras||[]).filter(c=>c.tipo==='alelo'); }
 function gNota(){
+  if(G.forma.startsWith('vale:')) return 'Entra no <b>Rolê</b> como gasto do vale e aparece em Gastos do mês e no Casal. Não mexe no saldo.';
   if(G.rec){ if(!G.forma.startsWith('card:')) return 'Entra agora na lista de compras e fica como <b>previsto todo mês</b> nesse item de Gastos do mês.';
     const c=G.forma.slice(5), fm=faturaMes(c,G.data||todayISO()); return `Vai para <b>Contas no cartão</b> e entra em toda fatura do ${c==='MP'?'Mercado Pago':esc(c)}, a partir da de <b>${MESES[+fm.slice(5)-1].toLowerCase()}</b>.${G.guardado?' Entra em Gastos do mês quando você tocar em <b>Guardei</b>.':' Aparece em Cartão de crédito › Compras do mês, por categoria.'}`; }
   if(!G.forma.startsWith('card:')) return 'Entra na lista de compras do mês e já soma na categoria.';
@@ -3089,14 +3091,14 @@ function saldoBoxHtml(mk,val,desconta,nota){
   return `<div class="saldo-box"><div><div class="sb-l">🏦 Saldo em conta</div><div class="sb-v ${sd<0?'neg':''}">${fmt(sd)}</div></div>
     ${v?(desconta?`<div style="text-align:right"><div class="sb-l">Vai ficar</div><div class="sb-v ${dep<0?'neg':''}">${fmt(dep)}</div></div>`:`<div class="sb-n">${esc(nota||'Não muda o saldo')}</div>`):''}</div>`;
 }
-function efeitoGasto(){ const card=G.forma.startsWith('card:'); if(!card) return [true,'']; if(G.rec) return G.guardado&&G.guardarAgora?[true,'']:[false,'Vai para o cartão, não muda o saldo agora']; return G.guardaCompra?[true,'']:[false,'Vai para a fatura do cartão, não muda o saldo agora']; }
+function efeitoGasto(){ if(G.forma.startsWith('vale:')) return [false,'Vale não mexe no saldo']; const card=G.forma.startsWith('card:'); if(!card) return [true,'']; if(G.rec) return G.guardado&&G.guardarAgora?[true,'']:[false,'Vai para o cartão, não muda o saldo agora']; return G.guardaCompra?[true,'']:[false,'Vai para a fatura do cartão, não muda o saldo agora']; }
 function atualizarSaldoG(){ const el=document.getElementById('g-saldo'); if(!el) return; const [d,n]=efeitoGasto(); el.innerHTML=saldoBoxHtml((G.data||todayISO()).slice(0,7),parseNum(G.valor),d,n); }
 function renderGasto(first){
   if(!first) lerG();
   const cards=S.config.cartoes||['Nubank'];
   const cat=G.cat||'gerais', item=G.item||itemPadrao(cat);
   const its=itensDaCat(cat); const descN=G.desc.trim();
-  const formas=[['pix','Pix','⚡'],['debito','Débito','🏦'],['dinheiro','Dinheiro','💵'],...cards.map(c=>['card:'+c,c==='MP'?'Mercado Pago':c,'💳'])];
+  const formas=[['pix','Pix','⚡'],['debito','Débito','🏦'],['dinheiro','Dinheiro','💵'],...cards.map(c=>['card:'+c,c==='MP'?'Mercado Pago':c,'💳']),...valeCarteiras().map(c=>['vale:'+c.id,c.nome,'🍽️'])];
   const ehCard=G.forma.startsWith('card:');
   const val=parseNum(G.valor);
   modal(`<h3>${G.rec?'Conta recorrente':'Lançar gasto'}</h3>
@@ -3147,6 +3149,12 @@ function salvarGasto(){
   if(G.projeto){ // gasto de projeto é só registro: não mexe em cartão, conta, caixinha nem orçamento
     S.config={...S.config,projGastos:[...(S.config.projGastos||[]),{id:uid('pg'),projeto:G.projeto,data,desc,valor:val,via:G.forma==='pix'?'Pix':G.forma==='debito'?'Débito':G.forma==='dinheiro'?'Dinheiro':'Cartão'}]};
     save('config','geral',S.config); closeModal(); toast(fmt(val)+' registrado no projeto · não mexe no saldo nem na fatura'); return; }
+  if(G.forma.startsWith('vale:')){
+    const cid=G.forma.slice(5), cart=valeCarteiras().find(c=>c.id===cid);
+    if(!cart){ toast('Carteira do vale não encontrada'); return; }
+    const catR=(ROLE_CATS.find(c=>c[0]===G.cat)||ROLE_CATS.find(c=>c[0]==='lanche')||ROLE_CATS[0])[0];
+    saveFundo({...C.fundo,lancamentos:[...(C.fundo.lancamentos||[]),{id:uid('r'),data,tipo:'gasto',carteira:cid,valor:val,desc,cat:catR,quem:C.me,dica:false}]});
+    closeModal(); toast(fmt(val)+' no '+cart.nome+' · aparece em Gastos do mês'); return; }
   if(G.rec && G.forma.startsWith('card:')){
     const card=G.forma.slice(5), desde=faturaMes(card,data);
     const conta={id:uid('c'),desc,cartao:card,valor:val,guardado:G.guardado,cat:cat+'|'+(G.item?item:desc),desde};
