@@ -800,10 +800,10 @@ function vInicio(){
     <button class="qa" data-go="melimais">${'<i>'+svg('estrela')+'</i>'}Meli+</button>
   </div>`;
   h += `<div class="grid g4">
-    <div class="card stat hero"><div class="lbl">Sobrou no mês</div><div class="val ${t.saldo>=0?'pos':'neg'}">${fmt(t.saldo)}</div><div class="ft">Entrou ${fmt(t.renda)} · saiu ${fmt(t.desp)}</div></div>
+    <div class="card stat hero" style="cursor:pointer" data-go="gastos" title="Ver Gastos do mês"><div class="lbl">Sobrou no mês</div><div class="val ${t.saldo>=0?'pos':'neg'}">${fmt(t.saldo)}</div><div class="ft">Entrou ${fmt(t.renda)} · saiu ${fmt(t.desp)}</div></div>
     ${(()=>{ const F=mk, inf=(S.cinfo.faturas||{})[F]||{}; const cs=[...new Set([...cartoesFatura(),...Object.keys(inf)])].map(c=>({c,banco:inf[c]!=null,v:inf[c]!=null?+inf[c]:composicaoFatura(c,F).tot})).filter(x=>x.v>0.004); const tot=sum(cs,x=>x.v); const prev=cs.some(x=>!x.banco); return `<div class="card stat" style="cursor:pointer" data-go="cartao" data-fatmes="${F}" title="Ver a fatura no Cartão de crédito"><div class="lbl">Fatura de ${mShort(F)}${prev&&cs.length?' <span style="text-transform:none;letter-spacing:0;font-weight:500">· prevista</span>':''}</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length?cs.map(x=>(x.c==='MP'?'MP':esc(x.c))+' '+fmt(x.v)).join(' · '):'Nada no cartão'}</div></div>`; })()}
-    <div class="card stat"><div class="lbl">Nas caixinhas</div><div class="val">${fmt(guardado)}</div><div class="ft">${cx.length} caixinhas</div></div>
-    <div class="card stat"><div class="lbl">Investido</div><div class="val">${fmt(investido)}</div><div class="ft">Patrimônio total ${fmt(guardado+investido)}</div></div>
+    <div class="card stat" style="cursor:pointer" data-go="caixinhas" title="Ver caixinhas"><div class="lbl">Nas caixinhas</div><div class="val">${fmt(guardado)}</div><div class="ft">${cx.length} caixinhas</div></div>
+    <div class="card stat" style="cursor:pointer" data-go="investimentos" title="Ver investimentos"><div class="lbl">Investido</div><div class="val">${fmt(investido)}</div><div class="ft">Patrimônio total ${fmt(guardado+investido)}</div></div>
   </div>`;
   const RA = resumoAno();
   h += `<div class="grid g21 section">
