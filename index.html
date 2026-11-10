@@ -2649,6 +2649,20 @@ function recuperarFaturasDe(D){
   save('cartaoinfo','geral',{...S.cinfo, snap});
   toast(n+' faturas de meses passados recalculadas');
 }
+function roleEditForm(id){
+  const l=(C.fundo&&C.fundo.lancamentos||[]).find(x=>x.id===id); if(!l) return;
+  const cs=(C.fundo.carteiras||[]);
+  const fields=[
+    {name:'desc',label:'Descrição',value:l.desc||''},
+    {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true,value:String(r2(l.valor)).replace('.',',')},{name:'data',label:'Data',type:'date',value:l.data||todayISO()}]},
+    {name:'carteira',label:'Carteira',type:'select',options:cs.map(c=>[c.id,c.nome]),value:l.carteira}];
+  if(l.tipo==='gasto') fields.push({name:'cat',label:'Tipo',type:'select',options:ROLE_CATS.map(c=>[c[0],c[2]+' '+c[1]]),value:l.cat});
+  form({title:l.tipo==='entrada'?'Editar entrada':'Editar gasto', submit:'Salvar', fields, onSubmit:v=>{
+    const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor';
+    const ls=(C.fundo.lancamentos||[]).map(x=>x.id!==id?x:{...x,desc:(v.desc||'').trim(),valor:val,data:v.data||x.data,carteira:v.carteira||x.carteira,...(x.tipo==='gasto'?{cat:v.cat||x.cat}:{})});
+    saveFundo({...C.fundo,lancamentos:ls}); toast('Lançamento atualizado');
+  }});
+}
 function valesDoMes(mk){
   const f=C.fundo||{}, cs=f.carteiras||[];
   return (f.lancamentos||[]).filter(l=>l.tipo==='gasto' && (l.data||'').slice(0,7)===mk && ((cs.find(c=>c.id===l.carteira)||{}).tipo==='alelo'))
@@ -2828,7 +2842,7 @@ function vRole(){
   if (mm.length>1){ let acc=0; const rows=mm.map(m=>{ const e=sum(L.filter(l=>l.tipo==='entrada'&&!l.inicial&&l.data.startsWith(m)),l=>l.valor), ini=sum(L.filter(l=>l.tipo==='entrada'&&l.inicial&&l.data.startsWith(m)),l=>l.valor), g=sum(L.filter(l=>l.tipo==='gasto'&&l.data.startsWith(m)),l=>l.valor); const antes=acc+ini; acc=antes+e-g; return {m,antes,e,g,fim:acc}; }).reverse();
     h += `<div class="card section"><div class="card-h"><div><h2>Mês a mês</h2><p>Como a aba GERAL da sua planilha: quanto entrou, quanto foi gasto e quanto sobrou</p></div></div><div class="tbl-wrap"><table><thead><tr><th>Mês</th><th class="r">Saldo inicial</th><th class="r">Entrou</th><th class="r">Gastou</th><th class="r">Saldo final</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${mShort(r.m)}/${r.m.slice(2,4)}</td><td class="r muted">${fmt(r.antes)}</td><td class="r pos">+${fmt(r.e)}</td><td class="r neg">−${fmt(r.g)}</td><td class="r"><b class="${r.fim<0?'neg':''}">${fmt(r.fim)}</b>${r.g>r.e?' <span class="pill warn" title="Gastou mais do que entrou no mês">↓</span>':''}</td></tr>`).join('')}</tbody><tfoot><tr><td>Total</td><td></td><td class="r">+${fmt(sum(rows,r=>r.e))}</td><td class="r">−${fmt(sum(rows,r=>r.g))}</td><td class="r">${fmt(acc)}</td></tr></tfoot></table></div></div>`; }
   h += `<div class="card section"><div class="card-h"><div><h2>Lançamentos</h2><p>${L.length} no total</p></div><button class="btn sm ghost" data-act="role-config">Carteiras</button></div>
-    ${L.length?`<div class="rows">${L.slice(0,UI.roleAll?999:20).map(l=>{const c=cs.find(x=>x.id===l.carteira)||{}; const cat=ROLE_CAT[l.cat]; return `<div class="row">${dBox(l.data)}<div class="grow"><div class="t">${l.tipo==='entrada'?(l.inicial?'Saldo inicial':'Entrou VR')+(l.desc?' · '+esc(l.desc):''):(cat?cat[2]+' ':'')+esc(l.desc||cat&&cat[1]||'Gasto')}</div><div class="s">${ic(c)} ${esc(c.nome||'')} · <span class="who"><i style="background:${corDe(l.quem)}"></i>${esc(nomeDe(l.quem))}</span>${l.dica?' · <span style="color:var(--gold)">dava pra usar o Alelo</span>':''}</div></div><span class="v ${l.tipo==='entrada'?'pos':''}">${l.tipo==='entrada'?'+':'−'}${fmt(l.valor)}</span><button class="iconbtn" aria-label="Apagar" data-del-role="${l.id}">${svg('trash')}</button></div>`;}).join('')}</div>${L.length>20&&!UI.roleAll?`<button class="btn sm ghost" data-roleall>Ver todos (${L.length})</button>`:''}`:'<p class="muted">Lance o VR que entrou e os gastos dos rolês.</p>'}</div>`;
+    ${L.length?`<div class="rows">${L.slice(0,UI.roleAll?999:20).map(l=>{const c=cs.find(x=>x.id===l.carteira)||{}; const cat=ROLE_CAT[l.cat]; return `<div class="row">${dBox(l.data)}<div class="grow"><div class="t">${l.tipo==='entrada'?(l.inicial?'Saldo inicial':'Entrou VR')+(l.desc?' · '+esc(l.desc):''):(cat?cat[2]+' ':'')+esc(l.desc||cat&&cat[1]||'Gasto')}</div><div class="s">${ic(c)} ${esc(c.nome||'')} · <span class="who"><i style="background:${corDe(l.quem)}"></i>${esc(nomeDe(l.quem))}</span>${l.dica?' · <span style="color:var(--gold)">dava pra usar o Alelo</span>':''}</div></div><span class="v ${l.tipo==='entrada'?'pos':''}">${l.tipo==='entrada'?'+':'−'}${fmt(l.valor)}</span><button class="iconbtn" aria-label="Editar" data-edit-role="${l.id}">${svg('pencil')}</button><button class="iconbtn" aria-label="Apagar" data-del-role="${l.id}">${svg('trash')}</button></div>`;}).join('')}</div>${L.length>20&&!UI.roleAll?`<button class="btn sm ghost" data-roleall>Ver todos (${L.length})</button>`:''}`:'<p class="muted">Lance o VR que entrou e os gastos dos rolês.</p>'}</div>`;
   return h;
 }
 Object.assign(ACT,{
@@ -3287,6 +3301,7 @@ document.addEventListener('click', e=>{
   const cxc = t.closest('[data-cxc]'); if(cxc){ openCxCasal(cxc.dataset.cxc); return; }
   const gi = t.closest('[data-grupo-item]'); if(gi){ const o=ensureOrc(UI.month); const it=o.itens.find(i=>i.id===gi.dataset.grupoItem); if(it){ it.grupo = grupoInvest(it)==='longo'?'caixinhas':'longo'; save('orcamento',UI.month,o); } return; }
   const mv = t.closest('[data-menu-mv]'); if(mv){ lerMenuInputs(); const i=+mv.dataset.i, j=i+(+mv.dataset.menuMv); if(j>=0&&j<MENU_TMP.length){ [MENU_TMP[i],MENU_TMP[j]]=[MENU_TMP[j],MENU_TMP[i]]; menuModal(); } return; }
+  const erl = t.closest('[data-edit-role]'); if(erl){ roleEditForm(erl.dataset.editRole); return; }
   const dro = t.closest('[data-del-role]'); if(dro){ saveFundo({...C.fundo,lancamentos:(C.fundo.lancamentos||[]).filter(l=>l.id!==dro.dataset.delRole)}); return; }
   if(t.closest('[data-roleall]')){ UI.roleAll=true; render(); return; }
   if(t.closest('[data-rmnav]')){ const d=+t.closest('[data-rmnav]').dataset.rmnav; const nx=addMonth(UI.roleMonth||thisMonth(),d); UI.roleMonth = nx>=thisMonth() ? null : nx; render(); return; }
