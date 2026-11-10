@@ -795,7 +795,7 @@ function vInicio(){
   if (S.offline) h += `<div class="banner">Não consegui conectar ao Firebase. Confira a internet e o arquivo firebase-config.js.</div>`;
   h += `<div class="quick">
     <button class="qa" data-act="novo-gasto">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
-    <button class="qa" data-act="nova-compra">${'<i>'+svg('cartao')+'</i>'}Compra no cartão</button>
+    <button class="qa" data-act="novo-recebido">${'<i>'+svg('plus')+'</i>'}Recebidos</button>
     <button class="qa" data-act="novo-mov">${'<i>'+svg('cx')+'</i>'}Guardar dinheiro</button>
     <button class="qa" data-go="melimais">${'<i>'+svg('estrela')+'</i>'}Meli+</button>
   </div>`;
@@ -859,9 +859,14 @@ function vGastos(){
   const devendo=emprList().filter(e=>emprTipo(e)==='peguei'&&emprPago(e)<e.valores.length&&e.inicio&&addMonth(e.inicio,emprPago(e))<=mk);
   if(devendo.length) h += `<div class="card section"><div class="card-h"><div><h2>Empréstimos a pagar</h2><p>Parcelas de ${mLabel(mk).toLowerCase()} e atrasadas · total ${fmt(sum(devendo,e=>e.valores[emprPago(e)]))}</p></div></div><div class="rows">${devendo.map(e=>{const pg=emprPago(e), atras=addMonth(e.inicio,pg)<mk; return `<div class="row"><div class="grow"><div class="t">${esc(e.desc)}</div><div class="s">${e.quem?esc(e.quem)+' · ':''}${e.valores.length>1?'parcela '+(pg+1)+' de '+e.valores.length+' · ':''}${atras?'<span class="pill bad">atrasada</span>':'vence em '+mShort(addMonth(e.inicio,pg))}</div></div><span class="v neg">−${fmt(e.valores[pg])}</span>${readonlyView()?'':`<button class="btn sm pri" data-empr-pagar="${e.id}">Paguei</button>`}</div>`;}).join('')}</div></div>`;
   // avulsos
-  const av = [...(o.avulsos||[])].sort((a,b)=>b.data.localeCompare(a.data));
-  h += `<div class="card section"><div class="card-h"><div><h2>Compras no débito, Pix e dinheiro</h2><p>Cada compra lançada aqui já soma na categoria · total ${fmt(sum(av,x=>x.valor))}</p></div><button class="btn sm" data-act="importar-extrato">Importar extrato</button></div>
-    ${av.length?`<div class="rows">${av.map(a=>{ const it=a.itemId&&(o.itens||[]).find(i=>i.id===a.itemId); const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro'}; return `<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div>${a.forma||it?`<div class="s">${a.forma?FM[a.forma]:''}${a.forma&&it?' · ':''}${it?`<i class="dot" style="background:${CAT[it.cat].c};width:7px;height:7px"></i> ${esc(CAT[it.cat].n)} › ${esc(it.nome)}`:''}</div>`:''}</div><span class="v">${fmt(a.valor)}</span><button class="btn sm ghost" data-cat-avulso="${a.id}">Categoria</button><button class="iconbtn" aria-label="Apagar ${esc(a.desc)}" data-del-avulso="${a.id}">${svg('trash')}</button></div>`; }).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
+  const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro'};
+  const todos=[
+    ...(o.avulsos||[]).map(x=>({...x,src:'avulso',label:FM[x.forma]||'Outro'})),
+    ...((S.cartao[mk]?.compras)||[]).map(x=>({...x,src:'cartao',label:'Cartão · '+(x.cartao==='MP'?'Mercado Pago':x.cartao)})),
+    ...valesDoMes(mk).map(x=>({...x,src:'vale',label:'Refeição · '+x.carteira})),
+  ].sort((x,y)=>y.data.localeCompare(x.data));
+  h += `<div class="card section"><div class="card-h"><div><h2>Compras do mês</h2><p>Pix, débito, dinheiro, cartão e refeição · total ${fmt(sum(todos,x=>x.valor))}</p></div><button class="btn sm" data-act="importar-extrato">Importar extrato</button></div>
+    ${todos.length?`<div class="rows">${todos.map(a=>{ const it=a.src==='avulso'&&a.itemId&&(o.itens||[]).find(i=>i.id===a.itemId); const ro=a.src==='vale'; return `<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div><div class="s">${esc(a.label)}${it?` · <i class="dot" style="background:${CAT[it.cat].c};width:7px;height:7px"></i> ${esc(CAT[it.cat].n)} › ${esc(it.nome)}`:''}${a.parcela?' · '+esc(a.parcela):''}</div></div><span class="v">${fmt(a.valor)}</span>${ro?'':`<button class="chip" aria-pressed="${!!a.casal}" data-casal="${a.src}" data-id="${a.id}" data-mk="${mk}">${a.casal?'👫 do casal':'do casal?'}</button>`}${a.src==='avulso'?`<button class="btn sm ghost" data-cat-avulso="${a.id}">Categoria</button>`:''}${ro?'<span class="muted" style="font-size:.78rem">edite no Rolê</span>':`<button class="iconbtn" aria-label="Apagar" data-del-${a.src==='avulso'?'avulso':'compra'}="${a.id}">${svg('trash')}</button>`}</div>`; }).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
   </div>`;
   // histórico
   const ks = Object.keys(S.orc).sort().slice(-8);
@@ -1053,7 +1058,7 @@ function vCompras(){
 
 const PTIPO = {limite:['A pagar','var(--bad)','bad'], guardado:['Dinheiro guardado','#1f3f8f','info'], recorrente:['Cai todo mês (não ocupa o limite todo)','var(--ink-2)','']};
 function cartaoHead(right=''){
-  const tabs=[['parcelas','Parcelas'],['contas','Contas no cartão'],['caixinha','Caixinha do cartão'],['compras','Compras do mês']];
+  const tabs=[['parcelas','Parcelas'],['contas','Contas no cartão'],['caixinha','Caixinha do cartão']];
   return head('Dia a dia','Cartão de crédito','Parcelas, contas fixas e o dinheiro guardado para pagar a fatura', right) +
     `<div class="chips" style="margin:-6px 0 18px">${tabs.map(([k,n])=>`<button class="chip" data-ctab="${k}" aria-pressed="${UI.cTab===k}">${n}</button>`).join('')}</div>`;
 }
@@ -2057,6 +2062,7 @@ const ACT = {
       {name:'pote',label:'Onde',type:'select',options:ps.map(p=>[p.id,p.nome+(p.tipo==='investimento'?' (investimento)':'')]),value:d.pote||(res?res.id:ps[0].id)},
       {name:'tipo',label:'Tipo',type:'seg',options:[['aporte','Guardar'],['resgate','Resgatar'],['rendimento','Rendimento']],value:d.tipo||'aporte'},
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
+      {name:'considera',label:'Se for resgate: entra como recebido no mês (saldo)?',type:'seg',options:[['sim','Sim, entra no saldo'],['nao','Não entra']],value:'sim'},
       {name:'obs',label:'Observação (opcional)'},
     ], extra:'<div id="mv-saldo"></div>', onSubmit:v=>{
       const val=parseNum(v.valor); if(!val) return 'Informe um valor';
@@ -2064,7 +2070,7 @@ const ACT = {
       const noCartao=p.tipo!=='cartao';
       if(v.tipo==='aporte' && noCartao) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
       espelharNoCasal(v.pote,mv);
-      if(v.tipo==='resgate' && noCartao) mv.receb=lancarRecebido('Transferência',val,v.data,'Resgate de '+p.nome);
+      if(v.tipo==='resgate' && noCartao && v.considera!=='nao') mv.receb=lancarRecebido('Transferência',val,v.data,'Resgate de '+p.nome);
       p.movimentos.push(mv); save('potes',v.pote,p);
       toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado · voltou ao saldo':'Rendimento lançado');
     }});
@@ -2554,7 +2560,29 @@ function vincularHtml(){
   </div>
   <p class="note">Depois de vinculados, cada um vê a tela do outro (sem poder alterar), e as caixinhas do casal ficam sincronizadas para os dois.</p>`;
 }
-function vCasal(){
+function valesDoMes(mk){
+  const f=C.fundo||{}, cs=f.carteiras||[];
+  return (f.lancamentos||[]).filter(l=>l.tipo==='gasto' && (l.data||'').slice(0,7)===mk && ((cs.find(c=>c.id===l.carteira)||{}).tipo==='alelo'))
+    .map(l=>({id:l.id,data:l.data,desc:l.desc||l.cat||'Refeição',valor:+l.valor||0,carteira:(cs.find(c=>c.id===l.carteira)||{}).nome||'Vale',casal:true}));
+}
+function comprasCasalHtml(){
+  const mk=UI.month, o=ensureOrc(mk), f=UI.casalFiltro||'Todos';
+  const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro'};
+  const itens=[
+    ...(o.avulsos||[]).filter(x=>x.casal).map(x=>({...x,key:x.forma||'outro',label:FM[x.forma]||'Outro'})),
+    ...((S.cartao[mk]?.compras)||[]).filter(x=>x.casal).map(x=>({...x,key:'cartao',label:'Cartão de crédito · '+(x.cartao==='MP'?'Mercado Pago':x.cartao)})),
+    ...valesDoMes(mk).map(x=>({...x,key:'vale:'+x.carteira,label:'Refeição · '+x.carteira})),
+  ];
+  const list=itens.filter(x=>f==='Todos'||x.key===f).sort((x,y)=>y.data.localeCompare(x.data));
+  const vales=[...new Set(valesDoMes(mk).map(x=>x.carteira))];
+  const chips=[['Todos','Todos'],['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito'],...vales.map(v=>['vale:'+v,v])];
+  return `<div class="card section"><div class="card-h"><div><h2>Compras do casal</h2><p>Só as compras marcadas como do casal em Gastos do mês · total ${fmt(sum(list,x=>x.valor))}</p></div></div>
+    <div class="chips" style="margin-bottom:10px">${chips.map(([k,n])=>`<button class="chip" data-casalf="${esc(k)}" aria-pressed="${f===k}">${esc(n)}</button>`).join('')}</div>
+    ${list.length?`<div class="rows">${list.map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.desc)}</div><div class="s">${esc(x.label)}</div></div><span class="v">${fmt(x.valor)}</span></div>`).join('')}</div>`:'<p class="muted">Nenhuma compra do casal neste filtro.</p>'}
+  </div>`;
+}
+function vCasal(){ const base=vCasalBase(); return (C.on&&C.parc)?base+comprasCasalHtml():base; }
+function vCasalBase(){
   let h = head('Casal', C.parc ? `${esc(meuNome())} & ${esc(nomeParceiro())}` : 'Finanças do casal', C.parc?'O dinheiro de vocês dois é o que está nas caixinhas do casal':'Vincule a sua conta com a do seu amor para montar as caixinhas de vocês', C.parc?`<button class="btn pri" data-act="nova-cx-casal">${svg('plus')}Nova caixinha</button>`:'');
   if (!C.on) return h+'<div class="card empty"><p>A parte do casal funciona na versão do app com login (GitHub Pages).</p></div>';
   if (!C.parc) return h+vincularHtml();
@@ -3235,6 +3263,11 @@ document.addEventListener('click', e=>{
   const fn = t.closest('[data-fatnav]'); if(fn){ const d=+fn.dataset.fatnav; UI.fatMes = d? addMonth(UI.fatMes||thisMonth(),d) : thisMonth(); render(); return; }
   const ct = t.closest('[data-ctab]'); if(ct){ UI.cTab=ct.dataset.ctab; render(); return; }
   const pc = t.closest('[data-parc]'); if(pc){ const lst=(S.cinfo.parcelas||[]).map(x=>{ if(x.id!==pc.dataset.parc) return x; const d=+pc.dataset.d, pm=parcMeses(x); let q=1; if(d>0){ q=pm.filter((m,i)=>i>=x.pagas&&m===pm[x.pagas]).length||1; } else if(x.pagas>0){ q=pm.filter((m,i)=>i<x.pagas&&m===pm[x.pagas-1]).length||1; } return {...x,pagas:Math.max(0,Math.min(x.valores.length,x.pagas+d*q))}; }); save('cartaoinfo','geral',{...S.cinfo,parcelas:lst}); return; }
+  const cfl = t.closest('[data-casalf]'); if(cfl){ UI.casalFiltro=cfl.dataset.casalf; render(); return; }
+  const cas = t.closest('[data-casal]'); if(cas){ if(readonlyView()) return save(); const src=cas.dataset.casal, cid=cas.dataset.id, cmk=cas.dataset.mk||UI.month;
+    if(src==='avulso'){ const o2=ensureOrc(cmk); const av2=(o2.avulsos||[]).find(x=>x.id===cid); if(av2){ av2.casal=!av2.casal; save('orcamento',cmk,o2); } }
+    else if(src==='cartao'){ const c2=JSON.parse(JSON.stringify(S.cartao[cmk]||{compras:[]})); const x2=(c2.compras||[]).find(q=>q.id===cid); if(x2){ x2.casal=!x2.casal; save('cartao',cmk,c2); } }
+    render(); return; }
   const fl = t.closest('[data-filtro]'); if(fl){ UI.cartaoFiltro=fl.dataset.filtro; render(); return; }
   const ix = t.closest('[data-incx]'); if(ix){ UI.incluirCx = ix.dataset.incx==='1'; render(); return; }
   const di = t.closest('[data-del-item]'); if(di){ const o=ensureOrc(UI.month); o.itens=o.itens.filter(i=>i.id!==di.dataset.delItem); save('orcamento',UI.month,o); toast('Item apagado'); return; }
