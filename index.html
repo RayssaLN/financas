@@ -2676,9 +2676,28 @@ function roleEditForm(id){
     {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true,value:String(r2(l.valor)).replace('.',',')},{name:'data',label:'Data',type:'date',value:l.data||todayISO()}]},
     {name:'carteira',label:'Carteira',type:'select',options:cs.map(c=>[c.id,c.nome]),value:l.carteira}];
   if(l.tipo==='gasto') fields.push({name:'cat',label:'Tipo',type:'select',options:ROLE_CATS.map(c=>[c[0],c[2]+' '+c[1]]),value:l.cat});
+  if(l.tipo==='gasto'){
+    fields.push({name:'forma',label:'Como pagou (se não foi vale)',type:'seg',options:[['vale','Vale'],['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito']],value:'vale'});
+    fields.push({name:'cartao',label:'Qual cartão (se for cartão)',type:'select',options:((S.config.cartoes&&S.config.cartoes.length)?S.config.cartoes:['Nubank','MP']).map(c=>[c,c==='MP'?'Mercado Pago':c]),value:(S.config.cartoes&&S.config.cartoes[0])||'Nubank'});
+  }
   form({title:l.tipo==='entrada'?'Editar entrada':'Editar gasto', submit:'Salvar', fields, onSubmit:v=>{
     const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor';
-    const ls=(C.fundo.lancamentos||[]).map(x=>x.id!==id?x:{...x,desc:(v.desc||'').trim(),valor:val,data:v.data||x.data,carteira:v.carteira||x.carteira,...(x.tipo==='gasto'?{cat:v.cat||x.cat}:{})});
+    const desc=(v.desc||'').trim()||l.desc||'Gasto', data=v.data||l.data||todayISO();
+    if(l.tipo==='gasto' && v.forma && v.forma!=='vale'){
+      saveFundo({...C.fundo,lancamentos:(C.fundo.lancamentos||[]).filter(x=>x.id!==id)});
+      if(v.forma==='cartao'){
+        const mk=data.slice(0,7); const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{mes:mk,compras:[]})); c2.compras=c2.compras||[];
+        c2.compras.push({id:uid('c'),data,desc,valor:val,cartao:v.cartao||'Nubank',parcela:'',cat:'comida|Comida e bebida',casal:true});
+        save('cartao',mk,c2);
+      } else {
+        const ref=lancarNoGasto('comida','Comida e bebida',val,data,desc);
+        const o3=JSON.parse(JSON.stringify(ensureOrc(ref.mes))); const av=(o3.avulsos||[]).find(q=>q.id===ref.avulso);
+        if(av){ av.forma=v.forma; av.casal=true; } save('orcamento',ref.mes,o3);
+      }
+      toast('Gasto passou para '+({pix:'Pix',debito:'Débito',dinheiro:'Dinheiro',cartao:'Cartão de crédito'})[v.forma]);
+      return;
+    }
+    const ls=(C.fundo.lancamentos||[]).map(x=>x.id!==id?x:{...x,desc,valor:val,data,carteira:v.carteira||x.carteira,...(x.tipo==='gasto'?{cat:v.cat||x.cat}:{})});
     saveFundo({...C.fundo,lancamentos:ls}); toast('Lançamento atualizado');
   }});
 }
