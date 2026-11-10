@@ -2090,7 +2090,8 @@ const ACT = {
       {name:'pote',label:'Onde',type:'select',options:ps.map(p=>[p.id,p.nome+(p.tipo==='investimento'?' (investimento)':'')]),value:d.pote||(res?res.id:ps[0].id)},
       {name:'tipo',label:'Tipo',type:'seg',options:[['aporte','Guardar'],['resgate','Resgatar'],['rendimento','Rendimento']],value:d.tipo||'aporte'},
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
-      {name:'considera',label:'Se for resgate: entra como recebido no mês (saldo)?',type:'seg',options:[['sim','Sim, entra no saldo'],['nao','Não entra']],value:'sim'},
+      {name:'considera',label:'Se for resgate, esse dinheiro virou o quê?',type:'seg',options:[['sim','Recebido'],['compra','Pagou uma compra'],['nao','Não entra']],value:'sim'},
+      {name:'compraDesc',label:'Se pagou uma compra: o que foi?'},
       {name:'obs',label:'Observação (opcional)'},
     ], extra:'<div id="mv-pote"></div><div id="mv-saldo"></div>', onSubmit:v=>{
       const val=parseNum(v.valor); if(!val) return 'Informe um valor';
@@ -2098,7 +2099,8 @@ const ACT = {
       const noCartao=p.tipo!=='cartao';
       if(v.tipo==='aporte' && noCartao) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
       espelharNoCasal(v.pote,mv);
-      if(v.tipo==='resgate' && noCartao && v.considera!=='nao') mv.receb=lancarRecebido('Transferência',val,v.data,'Resgate de '+p.nome);
+      if(v.tipo==='resgate' && noCartao && v.considera==='sim') mv.receb=lancarRecebido('Transferência',val,v.data,'Resgate de '+p.nome);
+      if(v.tipo==='resgate' && noCartao && v.considera==='compra'){ const d=(v.compraDesc||'').trim()||('Compra paga com '+p.nome); mv.gasto=lancarNoGasto('gerais','Outros',r2(val),v.data,d); if(!mv.obs) mv.obs='Pagou: '+d; }
       p.movimentos.push(mv); save('potes',v.pote,p);
       toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado · voltou ao saldo':'Rendimento lançado');
     }});
