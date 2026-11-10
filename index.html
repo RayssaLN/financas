@@ -485,7 +485,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
     </div>
     <div id="perfil-switch" class="pswitch" hidden></div>
     <nav id="sidenav" class="stack" style="gap:18px"></nav>
-    <div class="foot stack" style="gap:10px"><button class="navbtn" data-act="cores" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a3 3 0 0 1 0-6h1.5"/></svg>Cores do app</button><button class="navbtn" data-act="menu" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="17" cy="6" r="2"/><circle cx="14" cy="18" r="2"/></svg>Personalizar menu</button><button class="navbtn" data-act="importar-extrato" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Importar extrato</button><button class="navbtn" data-act="sugerir" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Sugerir melhoria</button><button class="navbtn" data-act="ver-sugestoes" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Ver sugestões recebidas</button><button class="navbtn" data-act="backup" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Backup dos dados</button><button class="navbtn" data-act="sair" id="btn-sair" style="padding:6px 0" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sair</button><span class="sync" id="sync"><i></i><span>Conectando…</span></span></div>
+    <div class="foot stack" style="gap:10px"><button class="navbtn" data-act="cores" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a3 3 0 0 1 0-6h1.5"/></svg>Cores do app</button><button class="navbtn" data-act="menu" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="17" cy="6" r="2"/><circle cx="14" cy="18" r="2"/></svg>Personalizar menu</button><button class="navbtn" data-act="importar-extrato" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Importar extrato</button><button class="navbtn" data-act="sugerir" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Sugerir melhoria</button><button class="navbtn" data-act="ver-sugestoes" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Ver sugestões recebidas</button><button class="navbtn" data-act="recuperar-faturas" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4"/></svg>Recuperar faturas do backup</button><button class="navbtn" data-act="backup" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Backup dos dados</button><button class="navbtn" data-act="sair" id="btn-sair" style="padding:6px 0" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sair</button><span class="sync" id="sync"><i></i><span>Conectando…</span></span></div>
   </aside>
 
   <main id="main"><div class="loading">Carregando suas finanças…</div></main>
@@ -768,7 +768,7 @@ function renderNav(){
   document.getElementById('sidenav').innerHTML = groups.map(g=>`<div class="navgroup">${g?`<h6>${g}</h6>`:''}${VIEWS.filter(v=>v.g===g).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.n}</button>`).join('')}</div>`).join('');
   const inMore = !BNAV.includes(UI.view);
   document.getElementById('bnav').innerHTML = BNAV.map(id=>{const v=VIEWS.find(x=>x.id===id); return `<button data-go="${id}" ${UI.view===id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`;}).join('') + `<button data-more ${inMore?'aria-current="page"':''}>${svg('more')}Mais</button>`;
-  document.getElementById('morepanel').innerHTML = (C.on?`<div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:2px">Ver finanças de</div><div class="pswitch-m" style="grid-column:1/-1;margin:0 0 6px">${pbtns()}</div><div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600">${UI.perfil==='casal'?'Configurações':'Telas'}</div>`:'') + VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="cores">${svg('carteira')}Cores do app</button><button class="navbtn" data-act="menu">${svg('gastos')}Personalizar menu</button><button class="navbtn" data-act="importar-extrato">${svg('gastos')}Importar extrato</button><button class="navbtn" data-act="sugerir">${svg('estrela')}Sugerir melhoria</button><button class="navbtn" data-act="ver-sugestoes">${svg('estrela')}Ver sugestões recebidas</button><button class="navbtn" data-act="backup">${svg('cx')}Backup dos dados</button>` + (window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair</button>`:'');
+  document.getElementById('morepanel').innerHTML = (C.on?`<div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:2px">Ver finanças de</div><div class="pswitch-m" style="grid-column:1/-1;margin:0 0 6px">${pbtns()}</div><div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600">${UI.perfil==='casal'?'Configurações':'Telas'}</div>`:'') + VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="cores">${svg('carteira')}Cores do app</button><button class="navbtn" data-act="menu">${svg('gastos')}Personalizar menu</button><button class="navbtn" data-act="importar-extrato">${svg('gastos')}Importar extrato</button><button class="navbtn" data-act="sugerir">${svg('estrela')}Sugerir melhoria</button><button class="navbtn" data-act="ver-sugestoes">${svg('estrela')}Ver sugestões recebidas</button><button class="navbtn" data-act="recuperar-faturas">${svg('cx')}Recuperar faturas do backup</button><button class="navbtn" data-act="backup">${svg('cx')}Backup dos dados</button>` + (window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair</button>`:'');
 }
 function go(id){ UI.view=id; try{localStorage.setItem('fin.view',id)}catch(e){} document.getElementById('more').classList.remove('open'); renderNav(); render(); window.scrollTo(0,0); }
 
@@ -2143,6 +2143,14 @@ const ACT = {
         return `<div class="row"><div class="grow"><div class="t" style="white-space:pre-wrap">${esc(x.texto||'')}</div><div class="s">${esc(x.nome||'')} · ${esc(x.tela||'')} · ${esc(dt)}</div></div><button class="iconbtn" aria-label="Apagar" data-sug-del="${d.id}">${svg('trash')}</button></div>`; }).join('');
     }).catch(()=>{ const el=document.getElementById('sug-list'); if(el) el.innerHTML='<p class="muted">Não foi possível abrir. Esta lista só abre na conta da dona do app.</p>'; });
   },
+  'recuperar-faturas'(){
+    document.getElementById('more').classList.remove('open');
+    if(readonlyView()){ toast('Só a dona do app pode fazer isso'); return; }
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json';
+    inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+      const rd=new FileReader(); rd.onload=()=>{ let D=null; try{ D=JSON.parse(rd.result); }catch(e){} recuperarFaturasDe(D); }; rd.readAsText(f); };
+    inp.click();
+  },
   'cores'(){
     document.getElementById('more').classList.remove('open');
     const cur=document.documentElement.getAttribute('data-pal');
@@ -2597,6 +2605,20 @@ function vincularHtml(){
       <button class="btn pri" data-act="entrar-casal">Entrar no casal</button></div>
   </div>
   <p class="note">Depois de vinculados, cada um vê a tela do outro (sem poder alterar), e as caixinhas do casal ficam sincronizadas para os dois.</p>`;
+}
+function recuperarFaturasDe(D){
+  const d=D&&D.dados; if(!d||!d.cartaoinfo||!d.cartaoinfo.geral){ toast('Esse arquivo não tem as faturas do app'); return; }
+  if(!confirm('Recalcular as faturas dos meses passados usando esse backup? Os valores atuais dos meses passados serão substituídos. Os meses atuais e as contas não mudam.')) return;
+  const sv={ci:S.cinfo, ca:S.cartao, cf:S.config}; const snap={}; let n=0;
+  try{
+    S.cinfo=JSON.parse(JSON.stringify(d.cartaoinfo.geral)); S.cartao=JSON.parse(JSON.stringify(d.cartao||{})); S.config=JSON.parse(JSON.stringify(d.config||sv.cf));
+    const cards=[...new Set([...cartoesFatura(),'Nubank','MP'])]; const hoje=thisMonth(); const meses=[]; let m='2024-01';
+    while(m<hoje){ meses.push(m); m=addMonth(m,1); }
+    meses.forEach(F=>cards.forEach(card=>{ const c=composicaoViva(card,F); if(c.it.length){ snap[F+'|'+card]=JSON.parse(JSON.stringify({it:c.it,tot:c.tot})); n++; } }));
+  } catch(e){ toast('Não consegui recalcular: '+(e.message||'erro')); return; }
+  finally { S.cinfo=sv.ci; S.cartao=sv.ca; S.config=sv.cf; }
+  save('cartaoinfo','geral',{...S.cinfo, snap});
+  toast(n+' faturas de meses passados recalculadas');
 }
 function valesDoMes(mk){
   const f=C.fundo||{}, cs=f.carteiras||[];
