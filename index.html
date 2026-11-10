@@ -798,28 +798,35 @@ function inicioQuickIds(){ const v=(S.config.inicioQuick||['novo-gasto','novo-re
 function faturaPaga(F){ const cs=cartoesFatura(), pg=((S.cinfo.pagas||{})[F]||{}); return cs.length>0 && cs.every(c=>!!pg[c]); }
 function faturaExibida(mk){ return (mk===thisMonth() && faturaPaga(mk)) ? addMonth(mk,1) : mk; }
 function fmtN(v){ return fmt(v).replace(/^R\$\s?/,''); }
+function meuResumo(mk){
+  const o=orcOf(mk)||{};
+  const ref=sum(valesDoMes(mk).filter(x=>x.quem===C.me),x=>x.valor);
+  const cartao=sum((S.cartao[mk]?.compras)||[],x=>x.valor);
+  const pix=sum((o.avulsos||[]).filter(x=>!x.fora),x=>x.valor);
+  return {ref:r2(ref),cartao:r2(cartao),pix:r2(pix)};
+}
+function publicarResumo(mk){
+  if(!C.on||!C.cid||!C.me) return;
+  const r=meuResumo(mk), js=JSON.stringify(r), key=mk+'_'+C.me;
+  if(C.resumoPub===key+js) return;
+  C.resumoPub=key+js;
+  try{ window.__couple.casalDb(C.cid).collection('resumo').doc(key).set({...r,mk,quem:C.me}).catch(()=>{}); }catch(e){}
+}
 function resumoCasalHtml(mk){
   if(!C.on||!C.parc) return '';
-  const pes=[C.me,C.parc]; const nomeP=u=>u===C.me?meuNome():nomeParceiro();
-  const o=orcOf(mk)||{};
-  const vales=valesDoMes(mk).map(x=>({...x,k:'ref'}));
-  const cas=[...(o.avulsos||[]).filter(x=>!x.fora).map(x=>({...x,k:'pix'})), ...((S.cartao[mk]?.compras)||[]).map(x=>({...x,k:'cartao'}))];
-  const all=[...vales,...cas];
-  const quemDe=q=>q===null?all.filter(x=>!x.quem||!pes.includes(x.quem)):all.filter(x=>x.quem===q);
-  const colunas=[...pes.map(q=>({q, nome:nomeP(q)}))];
-  const semQuemTot=sum(quemDe(null),x=>x.valor);
-  if(semQuemTot>0) colunas.push({q:null, nome:'Não marcado'});
-  const lista=(q,fn)=>q===null?fn(quemDe(null)):fn(quemDe(q));
-  const linha=(nome,fn)=>`<tr><td>${nome}</td>${colunas.map(c=>`<td class="r">${fmtN(lista(c.q,fn))}</td>`).join('')}</tr>`;
-  const soma=(lst,k)=>sum(lst.filter(x=>k===undefined||x.k===k),x=>x.valor);
+  publicarResumo(mk);
+  const eu=meuResumo(mk), ele=(C.resumo||{})[mk+'_'+C.parc];
+  const tot=r=>r?r.ref+r.cartao+r.pix:null;
+  const celula=(r,k)=>r?fmtN(r[k]):'—';
+  const linha=(nome,k)=>`<tr><td>${nome}</td><td class="r">${fmtN(eu[k])}</td><td class="r">${celula(ele,k)}</td></tr>`;
   return `<div class="card"><div class="card-h"><div><h2>Gastos do mês</h2><p>${mLabel(mk)} · quanto cada um gastou</p></div><button class="btn sm ghost" data-go="gastos">Ver tudo →</button></div>
-    <div class="tbl-wrap fit"><table><thead><tr><th></th>${colunas.map(c=>`<th class="r">${esc(c.nome)}</th>`).join('')}</tr></thead><tbody>
-      ${linha('Refeição (vale)',l=>soma(l,'ref'))}
-      ${linha('Cartão',l=>soma(l,'cartao'))}
-      ${linha('Pix, débito e dinheiro',l=>soma(l,'pix'))}
-      <tr><td><b>Total</b></td>${colunas.map(c=>`<td class="r"><b>${fmtN(lista(c.q,l=>soma(l)))}</b></td>`).join('')}</tr>
+    <div class="tbl-wrap fit"><table><thead><tr><th></th><th class="r">${esc(meuNome())}</th><th class="r">${esc(nomeParceiro())}</th></tr></thead><tbody>
+      ${linha('Refeição (vale)','ref')}
+      ${linha('Cartão','cartao')}
+      ${linha('Pix, débito e dinheiro','pix')}
+      <tr><td><b>Total</b></td><td class="r"><b>${fmtN(tot(eu))}</b></td><td class="r"><b>${celula(ele?{...ele,ref:tot(ele)}:null,'ref')}</b></td></tr>
     </tbody></table></div>
-    <p class="muted" style="font-size:.8rem;margin:8px 0 0">Total do mês: ${fmt(sum(all,x=>x.valor))}${semQuemTot>0?' · na coluna "Não marcado" estão as compras sem quem gastou; abra o lápis da compra e escolha':''}</p></div>`;
+    <p class="muted" style="font-size:.8rem;margin:8px 0 0">${ele?'Total dos dois: '+fmt(tot(eu)+tot(ele)):'Ainda não recebi os gastos de '+esc(nomeParceiro())+'. Ele precisa abrir o app atualizado para aparecer aqui.'}</p></div>`;
 }
 function vInicio(){
   const mk = UI.month, t = orcTotals(orcOf(mk));
@@ -2595,11 +2602,12 @@ function initCasal(){
   renderNav();
   try{ db.doc('perfil/foto').onSnapshot(d=>{ C.fotos.eu=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}); }catch(e){}
   cp.onCasal(info=>{
-    C.unsubs.forEach(u=>{ try{u()}catch(e){} }); C.unsubs=[]; C.potesDe={}; C.cpotes={}; C.fotos={eu:C.fotos.eu};
+    C.unsubs.forEach(u=>{ try{u()}catch(e){} }); C.unsubs=[]; C.potesDe={}; C.cpotes={}; C.resumo={}; C.resumoPub=null; C.fotos={eu:C.fotos.eu};
     C.cid = info ? info.cid : null; C.casal = info; C.parc = info ? (info.membros||[]).find(u=>u!==C.me) || null : null;
     if (info && info.nomes && info.nomes[C.me]) C.meNome = info.nomes[C.me];
     if (C.cid){
       C.unsubs.push(cp.casalDb(C.cid).collection('fundo').onSnapshot(sn=>{ const d=sn.docs.find(x=>x.id==='role'); C.fundo=d?d.data():null; if(UI.perfil==='casal') render(); }, ()=>{}));
+      C.unsubs.push(cp.casalDb(C.cid).collection('resumo').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.resumo=o; if(UI.view==='inicio') render(); }, ()=>{}));
       C.unsubs.push(cp.casalDb(C.cid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.cpotes=o; if(UI.perfil==='casal') render(); }, ()=>{}));
       C.unsubs.push(cp.casalDb(C.cid).doc('perfil/fotos').onSnapshot(d=>{ C.fotos.casal=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}));
       if (C.parc) C.unsubs.push(cp.dbFor(C.parc).doc('perfil/foto').onSnapshot(d=>{ C.fotos.parc=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}));
@@ -2764,18 +2772,17 @@ function compraEditForm(src,id,mk){
       {name:'desc',label:'Descrição',value:a.desc||''},
       {name:'forma',label:'Como pagou',type:'seg',options:[['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito']],value:formaAtual},
       {name:'cartao',label:'Qual cartão (se for cartão)',type:'select',options:cards.map(c=>[c,c==='MP'?'Mercado Pago':c]),value:src==='cartao'?a.cartao:cards[0]},
-      {name:'quem',label:'Quem gastou',type:'seg',options:(C.parc?[[C.me,'Eu'],[C.parc,nomeParceiro()]]:[[C.me,'Eu']]),value:a.quem||C.me},
       {name:'casal',label:'Compra do casal?',type:'seg',options:[['nao','Não'],['sim','Sim']],value:a.casal?'sim':'nao'}
     ],
     extra: src==='avulso' ? `<div class="actions"><button class="btn sm ghost" data-cat-avulso="${esc(id)}">Mudar categoria</button></div>` : '',
     onSubmit:v=>{
-      const c=v.casal==='sim', nd=(v.desc||'').trim()||a.desc, nf=v.forma||formaAtual, q=v.quem||a.quem||null;
+      const c=v.casal==='sim', nd=(v.desc||'').trim()||a.desc, nf=v.forma||formaAtual;
       if(src==='avulso' && nf==='cartao'){
         const o2=JSON.parse(JSON.stringify(ensureOrc(mk))); const av=(o2.avulsos||[]).find(x=>x.id===id); if(!av) return;
         const it=(o2.itens||[]).find(i=>i.id===av.itemId); if(it) it.real=r2(Math.max(0,(+it.real||0)-(+av.valor||0)));
         o2.avulsos=(o2.avulsos||[]).filter(x=>x.id!==id); save('orcamento',mk,o2);
         const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{mes:mk,compras:[]})); c2.compras=c2.compras||[];
-        c2.compras.push({id:uid('c'),data:av.data,desc:nd,valor:av.valor,cartao:v.cartao||cards[0],parcela:'',cat:(av.cat||'gerais')+'|'+(it?it.nome:'Outros'),casal:c,quem:q});
+        c2.compras.push({id:uid('c'),data:av.data,desc:nd,valor:av.valor,cartao:v.cartao||cards[0],parcela:'',cat:(av.cat||'gerais')+'|'+(it?it.nome:'Outros'),casal:c});
         save('cartao',mk,c2); UI.fatMes=null; go('cartao'); return;
       }
       if(src==='cartao' && nf!=='cartao'){
@@ -2785,12 +2792,12 @@ function compraEditForm(src,id,mk){
         const parts=String(x2.cat||'gerais|Outros').split('|');
         const ref=lancarNoGasto(parts[0]||'gerais', parts[1]||'Outros', r2(x2.valor), x2.data, nd);
         const o3=JSON.parse(JSON.stringify(ensureOrc(ref.mes))); const av=(o3.avulsos||[]).find(q=>q.id===ref.avulso);
-        if(av){ av.forma=nf; av.casal=c; av.desc=nd; av.quem=q; } save('orcamento',ref.mes,o3);
+        if(av){ av.forma=nf; av.casal=c; av.desc=nd; } save('orcamento',ref.mes,o3);
         return;
       }
-      if(src==='avulso'){ const o2=JSON.parse(JSON.stringify(ensureOrc(mk))); const av=(o2.avulsos||[]).find(x=>x.id===id); if(!av) return; av.casal=c; av.desc=nd; av.forma=nf; av.quem=q; return save('orcamento',mk,o2); }
+      if(src==='avulso'){ const o2=JSON.parse(JSON.stringify(ensureOrc(mk))); const av=(o2.avulsos||[]).find(x=>x.id===id); if(!av) return; av.casal=c; av.desc=nd; av.forma=nf; return save('orcamento',mk,o2); }
       const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{compras:[]})); const x2=(c2.compras||[]).find(q=>q.id===id); if(!x2) return;
-      x2.casal=c; x2.desc=nd; x2.cartao=v.cartao||x2.cartao; x2.quem=q; return save('cartao',mk,c2);
+      x2.casal=c; x2.desc=nd; x2.cartao=v.cartao||x2.cartao; return save('cartao',mk,c2);
     }});
 }
 function vCasal(){ const base=vCasalBase(); return (C.on&&C.parc)?base+comprasCasalHtml():base; }
