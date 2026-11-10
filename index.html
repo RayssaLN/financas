@@ -865,7 +865,7 @@ function vGastos(){
   const devendo=emprList().filter(e=>emprTipo(e)==='peguei'&&emprPago(e)<e.valores.length&&e.inicio&&addMonth(e.inicio,emprPago(e))<=mk);
   if(devendo.length) h += `<div class="card section"><div class="card-h"><div><h2>Empréstimos a pagar</h2><p>Parcelas de ${mLabel(mk).toLowerCase()} e atrasadas · total ${fmt(sum(devendo,e=>e.valores[emprPago(e)]))}</p></div></div><div class="rows">${devendo.map(e=>{const pg=emprPago(e), atras=addMonth(e.inicio,pg)<mk; return `<div class="row"><div class="grow"><div class="t">${esc(e.desc)}</div><div class="s">${e.quem?esc(e.quem)+' · ':''}${e.valores.length>1?'parcela '+(pg+1)+' de '+e.valores.length+' · ':''}${atras?'<span class="pill bad">atrasada</span>':'vence em '+mShort(addMonth(e.inicio,pg))}</div></div><span class="v neg">−${fmt(e.valores[pg])}</span>${readonlyView()?'':`<button class="btn sm pri" data-empr-pagar="${e.id}">Paguei</button>`}</div>`;}).join('')}</div></div>`;
   // avulsos
-  const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro'};
+  const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro',caixinha:'Da caixinha'};
   const all=[
     ...(o.avulsos||[]).map(x=>({...x,src:'avulso',label:FM[x.forma]||'Outro'})),
     ...((S.cartao[mk]?.compras)||[]).map(x=>({...x,src:'cartao',label:'Cartão · '+(x.cartao==='MP'?'Mercado Pago':x.cartao)})),
@@ -2100,7 +2100,7 @@ const ACT = {
       if(v.tipo==='aporte' && noCartao) mv.gasto=lancarNoGasto('poupanca',p.nome,r2(val),v.data,'Guardado em '+p.nome);
       espelharNoCasal(v.pote,mv);
       if(v.tipo==='resgate' && noCartao && v.considera==='sim') mv.receb=lancarRecebido('Transferência',val,v.data,'Resgate de '+p.nome);
-      if(v.tipo==='resgate' && noCartao && v.considera==='compra'){ const d=(v.compraDesc||'').trim()||('Compra paga com '+p.nome); mv.gasto=lancarNoGasto('gerais','Outros',r2(val),v.data,d); if(!mv.obs) mv.obs='Pagou: '+d; }
+      if(v.tipo==='resgate' && noCartao && v.considera==='compra'){ const d=(v.compraDesc||'').trim()||('Compra paga com '+p.nome); const mes=v.data.slice(0,7); const o=orcPara(mes); o.avulsos=o.avulsos||[]; const aid=uid('a'); o.avulsos.push({id:aid,data:v.data,desc:d,valor:r2(val),forma:'caixinha',cat:'gerais',fora:true}); save('orcamento',mes,o); mv.gasto={mes,avulso:aid,valor:r2(val)}; if(!mv.obs) mv.obs='Pagou: '+d; }
       p.movimentos.push(mv); save('potes',v.pote,p);
       toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado · voltou ao saldo':'Rendimento lançado');
     }});
@@ -2695,14 +2695,14 @@ function valesDoMes(mk){
 }
 function comprasCasalHtml(){
   const mk=UI.month, o=ensureOrc(mk);
-  const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro'};
+  const FM={pix:'Pix',debito:'Débito',dinheiro:'Dinheiro',caixinha:'Da caixinha'};
   const list=[
-    ...(o.avulsos||[]).filter(x=>x.casal).map(x=>({...x,label:FM[x.forma]||'Outro'})),
-    ...((S.cartao[mk]?.compras)||[]).filter(x=>x.casal).map(x=>({...x,label:'Cartão de crédito · '+(x.cartao==='MP'?'Mercado Pago':x.cartao)})),
+    ...(o.avulsos||[]).filter(x=>x.casal).map(x=>({...x,src:'avulso',label:FM[x.forma]||'Outro'})),
+    ...((S.cartao[mk]?.compras)||[]).filter(x=>x.casal).map(x=>({...x,src:'cartao',label:'Cartão de crédito · '+(x.cartao==='MP'?'Mercado Pago':x.cartao)})),
     ...valesDoMes(mk).map(x=>({...x,label:'Refeição · '+x.carteira})),
   ].sort((x,y)=>y.data.localeCompare(x.data));
   return `<div class="card section"><div class="card-h"><div><h2>Compras do casal</h2><p>Compras marcadas como do casal em Gastos do mês · total ${fmt(sum(list,x=>x.valor))}</p></div></div>
-    ${list.length?`<div class="rows">${list.map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.desc)}</div><div class="s">${esc(x.label)}</div></div><span class="v">${fmt(x.valor)}</span></div>`).join('')}</div>`:'<p class="muted">Nenhuma compra do casal neste mês.</p>'}
+    ${list.length?`<div class="rows">${list.map(x=>`<div class="row">${dBox(x.data)}<div class="grow"><div class="t">${esc(x.desc)}</div><div class="s">${esc(x.label)}</div></div><span class="v">${fmt(x.valor)}</span>${x.src?`<button class="iconbtn" aria-label="Editar" data-edit-compra="${x.src}" data-id="${x.id}" data-mk="${mk}">${svg('pencil')}</button>`:''}</div>`).join('')}</div>`:'<p class="muted">Nenhuma compra do casal neste mês.</p>'}
   </div>`;
 }
 function compraEditForm(src,id,mk){
@@ -2710,16 +2710,39 @@ function compraEditForm(src,id,mk){
   const o=ensureOrc(mk);
   const a = src==='avulso' ? (o.avulsos||[]).find(x=>x.id===id) : ((S.cartao[mk]?.compras)||[]).find(x=>x.id===id);
   if(!a) return;
+  const cards=(S.config.cartoes&&S.config.cartoes.length)?S.config.cartoes:['Nubank','MP'];
+  const formaAtual = src==='avulso' ? (a.forma||'pix') : 'cartao';
   form({title:'Editar compra', submit:'Salvar',
     fields:[
       {name:'desc',label:'Descrição',value:a.desc||''},
+      {name:'forma',label:'Como pagou',type:'seg',options:[['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito']],value:formaAtual},
+      {name:'cartao',label:'Qual cartão (se for cartão)',type:'select',options:cards.map(c=>[c,c==='MP'?'Mercado Pago':c]),value:src==='cartao'?a.cartao:cards[0]},
       {name:'casal',label:'Compra do casal?',type:'seg',options:[['nao','Não'],['sim','Sim']],value:a.casal?'sim':'nao'}
     ],
     extra: src==='avulso' ? `<div class="actions"><button class="btn sm ghost" data-cat-avulso="${esc(id)}">Mudar categoria</button></div>` : '',
     onSubmit:v=>{
-      const c=v.casal==='sim', nd=(v.desc||'').trim()||a.desc;
-      if(src==='avulso'){ const o2=JSON.parse(JSON.stringify(ensureOrc(mk))); const av=(o2.avulsos||[]).find(x=>x.id===id); if(!av) return; av.casal=c; av.desc=nd; return save('orcamento',mk,o2); }
-      const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{compras:[]})); const x2=(c2.compras||[]).find(q=>q.id===id); if(!x2) return; x2.casal=c; x2.desc=nd; return save('cartao',mk,c2);
+      const c=v.casal==='sim', nd=(v.desc||'').trim()||a.desc, nf=v.forma||formaAtual;
+      if(src==='avulso' && nf==='cartao'){
+        const o2=JSON.parse(JSON.stringify(ensureOrc(mk))); const av=(o2.avulsos||[]).find(x=>x.id===id); if(!av) return;
+        const it=(o2.itens||[]).find(i=>i.id===av.itemId); if(it) it.real=r2(Math.max(0,(+it.real||0)-(+av.valor||0)));
+        o2.avulsos=(o2.avulsos||[]).filter(x=>x.id!==id); save('orcamento',mk,o2);
+        const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{mes:mk,compras:[]})); c2.compras=c2.compras||[];
+        c2.compras.push({id:uid('c'),data:av.data,desc:nd,valor:av.valor,cartao:v.cartao||cards[0],parcela:'',cat:(av.cat||'gerais')+'|'+(it?it.nome:'Outros'),casal:c});
+        save('cartao',mk,c2); UI.fatMes=null; go('cartao'); return;
+      }
+      if(src==='cartao' && nf!=='cartao'){
+        const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{mes:mk,compras:[]})); const x2=(c2.compras||[]).find(q=>q.id===id); if(!x2) return;
+        if(x2.guardado||x2.cxMov) return 'Essa compra está ligada à caixinha do cartão, não dá para passar para Pix aqui';
+        c2.compras=c2.compras.filter(q=>q.id!==id); save('cartao',mk,c2);
+        const parts=String(x2.cat||'gerais|Outros').split('|');
+        const ref=lancarNoGasto(parts[0]||'gerais', parts[1]||'Outros', r2(x2.valor), x2.data, nd);
+        const o3=JSON.parse(JSON.stringify(ensureOrc(ref.mes))); const av=(o3.avulsos||[]).find(q=>q.id===ref.avulso);
+        if(av){ av.forma=nf; av.casal=c; av.desc=nd; } save('orcamento',ref.mes,o3);
+        return;
+      }
+      if(src==='avulso'){ const o2=JSON.parse(JSON.stringify(ensureOrc(mk))); const av=(o2.avulsos||[]).find(x=>x.id===id); if(!av) return; av.casal=c; av.desc=nd; av.forma=nf; return save('orcamento',mk,o2); }
+      const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{compras:[]})); const x2=(c2.compras||[]).find(q=>q.id===id); if(!x2) return;
+      x2.casal=c; x2.desc=nd; x2.cartao=v.cartao||x2.cartao; return save('cartao',mk,c2);
     }});
 }
 function vCasal(){ const base=vCasalBase(); return (C.on&&C.parc)?base+comprasCasalHtml():base; }
