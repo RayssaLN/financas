@@ -245,7 +245,8 @@ h2{font-family:var(--display);font-weight:600;font-size:1.08rem;margin:0;letter-
 .tbl-wrap.fit{overflow-x:visible}
 .tbl-wrap.fit table{width:100%;table-layout:fixed}
 .tbl-wrap.fit th,.tbl-wrap.fit td{white-space:normal;font-size:.8rem;padding:8px 3px;word-break:break-word}
-.tbl-wrap.fit td.r,.tbl-wrap.fit th.r{white-space:nowrap;font-size:.74rem}
+.tbl-wrap.fit td.r{white-space:nowrap;font-size:.74rem}
+.tbl-wrap.fit th.r{white-space:normal;text-align:right}
 .tbl-wrap.fit th{font-size:.64rem;letter-spacing:.03em}
 table{width:100%;border-collapse:collapse;font-size:.88rem}
 th,td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -803,18 +804,22 @@ function resumoCasalHtml(mk){
   const o=orcOf(mk)||{};
   const vales=valesDoMes(mk).map(x=>({...x,k:'ref'}));
   const cas=[...(o.avulsos||[]).filter(x=>!x.fora).map(x=>({...x,k:'pix'})), ...((S.cartao[mk]?.compras)||[]).map(x=>({...x,k:'cartao'}))];
-  const tot=(lista,q)=>sum(lista.filter(x=>x.quem===q),x=>x.valor);
-  const linha=(nome,f)=>`<tr><td>${nome}</td>${pes.map(q=>`<td class="r">${fmt(f(q))}</td>`).join('')}</tr>`;
   const all=[...vales,...cas];
-  const semQuem=sum(all.filter(x=>!x.quem),x=>x.valor), totalCasal=sum(all,x=>x.valor);
-  return `<div class="card"><div class="card-h"><div><h2>Gastos do mês</h2><p>${mLabel(mk)} · todas as compras, por quem gastou</p></div><button class="btn sm ghost" data-go="gastos">Ver tudo →</button></div>
-    <div class="tbl-wrap fit"><table><thead><tr><th></th>${pes.map(q=>`<th class="r">${esc(nomeP(q))}</th>`).join('')}</tr></thead><tbody>
-      ${linha('Refeição (vale)',q=>tot(vales,q))}
-      ${linha('Cartão',q=>tot(cas.filter(x=>x.k==='cartao'),q))}
-      ${linha('Pix, débito e dinheiro',q=>tot(cas.filter(x=>x.k==='pix'),q))}
-      <tr><td><b>Total</b></td>${pes.map(q=>`<td class="r"><b>${fmt(tot(all,q))}</b></td>`).join('')}</tr>
+  const quemDe=q=>q===null?all.filter(x=>!x.quem||!pes.includes(x.quem)):all.filter(x=>x.quem===q);
+  const colunas=[...pes.map(q=>({q, nome:nomeP(q)}))];
+  const semQuemTot=sum(quemDe(null),x=>x.valor);
+  if(semQuemTot>0) colunas.push({q:null, nome:'Não marcado'});
+  const lista=(q,fn)=>q===null?fn(quemDe(null)):fn(quemDe(q));
+  const linha=(nome,fn)=>`<tr><td>${nome}</td>${colunas.map(c=>`<td class="r">${fmtN(lista(c.q,fn))}</td>`).join('')}</tr>`;
+  const soma=(lst,k)=>sum(lst.filter(x=>k===undefined||x.k===k),x=>x.valor);
+  return `<div class="card"><div class="card-h"><div><h2>Gastos do mês</h2><p>${mLabel(mk)} · quanto cada um gastou</p></div><button class="btn sm ghost" data-go="gastos">Ver tudo →</button></div>
+    <div class="tbl-wrap fit"><table><thead><tr><th></th>${colunas.map(c=>`<th class="r">${esc(c.nome)}</th>`).join('')}</tr></thead><tbody>
+      ${linha('Refeição (vale)',l=>soma(l,'ref'))}
+      ${linha('Cartão',l=>soma(l,'cartao'))}
+      ${linha('Pix, débito e dinheiro',l=>soma(l,'pix'))}
+      <tr><td><b>Total</b></td>${colunas.map(c=>`<td class="r"><b>${fmtN(lista(c.q,l=>soma(l)))}</b></td>`).join('')}</tr>
     </tbody></table></div>
-    <p class="muted" style="font-size:.8rem;margin:8px 0 0">Total geral: ${fmt(totalCasal)}${semQuem?` · ${fmt(semQuem)} sem quem gastou (abra o lápis da compra e escolha)`:''}</p></div>`;
+    <p class="muted" style="font-size:.8rem;margin:8px 0 0">Total do mês: ${fmt(sum(all,x=>x.valor))}${semQuemTot>0?' · na coluna "Não marcado" estão as compras sem quem gastou; abra o lápis da compra e escolha':''}</p></div>`;
 }
 function vInicio(){
   const mk = UI.month, t = orcTotals(orcOf(mk));
