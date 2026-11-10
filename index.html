@@ -485,7 +485,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
     </div>
     <div id="perfil-switch" class="pswitch" hidden></div>
     <nav id="sidenav" class="stack" style="gap:18px"></nav>
-    <div class="foot stack" style="gap:10px"><button class="navbtn" data-act="cores" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a3 3 0 0 1 0-6h1.5"/></svg>Cores do app</button><button class="navbtn" data-act="menu" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="17" cy="6" r="2"/><circle cx="14" cy="18" r="2"/></svg>Personalizar menu</button><button class="navbtn" data-act="importar-extrato" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Importar extrato</button><button class="navbtn" data-act="sugerir" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Sugerir melhoria</button><button class="navbtn" data-act="ver-sugestoes" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Ver sugestões recebidas</button><button class="navbtn" data-act="recuperar-faturas" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4"/></svg>Recuperar faturas do backup</button><button class="navbtn" data-act="backup" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Backup dos dados</button><button class="navbtn" data-act="sair" id="btn-sair" style="padding:6px 0" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sair</button><span class="sync" id="sync"><i></i><span>Conectando…</span></span></div>
+    <div class="foot stack" style="gap:10px"><button class="navbtn" data-act="cores" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a3 3 0 0 1 0-6h1.5"/></svg>Cores do app</button><button class="navbtn" data-act="menu" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="17" cy="6" r="2"/><circle cx="14" cy="18" r="2"/></svg>Personalizar menu</button><button class="navbtn" data-act="importar-extrato" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Importar extrato</button><button class="navbtn" data-act="sugestoes" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Sugestões</button><button class="navbtn" data-act="backup" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Backup dos dados</button><button class="navbtn" data-act="sair" id="btn-sair" style="padding:6px 0" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sair</button><span class="sync" id="sync"><i></i><span>Conectando…</span></span></div>
   </aside>
 
   <main id="main"><div class="loading">Carregando suas finanças…</div></main>
@@ -768,7 +768,7 @@ function renderNav(){
   document.getElementById('sidenav').innerHTML = groups.map(g=>`<div class="navgroup">${g?`<h6>${g}</h6>`:''}${VIEWS.filter(v=>v.g===g).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.n}</button>`).join('')}</div>`).join('');
   const inMore = !BNAV.includes(UI.view);
   document.getElementById('bnav').innerHTML = BNAV.map(id=>{const v=VIEWS.find(x=>x.id===id); return `<button data-go="${id}" ${UI.view===id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`;}).join('') + `<button data-more ${inMore?'aria-current="page"':''}>${svg('more')}Mais</button>`;
-  document.getElementById('morepanel').innerHTML = (C.on?`<div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:2px">Ver finanças de</div><div class="pswitch-m" style="grid-column:1/-1;margin:0 0 6px">${pbtns()}</div><div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600">${UI.perfil==='casal'?'Configurações':'Telas'}</div>`:'') + VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="cores">${svg('carteira')}Cores do app</button><button class="navbtn" data-act="menu">${svg('gastos')}Personalizar menu</button><button class="navbtn" data-act="importar-extrato">${svg('gastos')}Importar extrato</button><button class="navbtn" data-act="sugerir">${svg('estrela')}Sugerir melhoria</button><button class="navbtn" data-act="ver-sugestoes">${svg('estrela')}Ver sugestões recebidas</button><button class="navbtn" data-act="recuperar-faturas">${svg('cx')}Recuperar faturas do backup</button><button class="navbtn" data-act="backup">${svg('cx')}Backup dos dados</button>` + (window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair</button>`:'');
+  document.getElementById('morepanel').innerHTML = (C.on?`<div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:2px">Ver finanças de</div><div class="pswitch-m" style="grid-column:1/-1;margin:0 0 6px">${pbtns()}</div><div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600">${UI.perfil==='casal'?'Configurações':'Telas'}</div>`:'') + VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="cores">${svg('carteira')}Cores do app</button><button class="navbtn" data-act="menu">${svg('gastos')}Personalizar menu</button><button class="navbtn" data-act="importar-extrato">${svg('gastos')}Importar extrato</button><button class="navbtn" data-act="sugestoes">${svg('estrela')}Sugestões</button><button class="navbtn" data-act="backup">${svg('cx')}Backup dos dados</button>` + (window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair</button>`:'');
 }
 function go(id){ UI.view=id; try{localStorage.setItem('fin.view',id)}catch(e){} document.getElementById('more').classList.remove('open'); renderNav(); render(); window.scrollTo(0,0); }
 
@@ -1124,8 +1124,10 @@ function composicaoViva(card,F){
   F=F||thisMonth(); const it=[];
   const fora=((S.cinfo.fora||{})[F])||[];
   (S.cinfo.parcelas||[]).filter(p=>p.cartao===card).forEach(p=>{ const pm=parcMeses(p), n=p.valores.length; const jb=parcBase(p).juntas; let veio=jb[addMonth(F,-1)]===0; pm.forEach((m,i)=>{ if(m===F){ it.push({t:'Parcela',d:`${p.desc} ${i+1}/${n}`,v:p.valores[i],pid:p.id,veio}); veio=false; } }); });
-  (S.cinfo.contas||[]).filter(c=>c.cartao===card&&!c.parcelaId&&(!c.desde||F>=c.desde)&&!compraDaConta(c,F)).forEach(c=>it.push({t:'Conta',d:c.desc,v:fora.includes(c.id)?0:(+c.valor||0),cid:c.id,fora:fora.includes(c.id)}));
-  [addMonth(F,-3),addMonth(F,-2),addMonth(F,-1),F].forEach(mk=>(S.cartao[mk]?.compras||[]).filter(c=>c.cartao===card&&!c.parcela&&(c.fatura||faturaMes(card,c.data))===F).forEach(c=>it.push({t:'Compra',d:c.desc+' · '+c.data.slice(8,10)+'/'+c.data.slice(5,7),v:+c.valor||0,compra:c.id,mk,movida:!!c.fatura&&c.fatura!==faturaMes(card,c.data)})));
+  // conta paga = a compra lançada com o mesmo nome: não muda o total da fatura (fica sempre a conta, com o valor dela)
+  const pagas=new Set(); (S.cinfo.contas||[]).filter(c=>c.cartao===card&&!c.parcelaId&&(!c.desde||F>=c.desde)).forEach(c=>{ const x=compraDaConta(c,F); if(x) pagas.add(x.id); });
+  (S.cinfo.contas||[]).filter(c=>c.cartao===card&&!c.parcelaId&&(!c.desde||F>=c.desde)).forEach(c=>it.push({t:'Conta',d:c.desc,v:fora.includes(c.id)?0:(+c.valor||0),cid:c.id,fora:fora.includes(c.id)}));
+  [addMonth(F,-3),addMonth(F,-2),addMonth(F,-1),F].forEach(mk=>(S.cartao[mk]?.compras||[]).filter(c=>c.cartao===card&&!c.parcela&&!pagas.has(c.id)&&(c.fatura||faturaMes(card,c.data))===F).forEach(c=>it.push({t:'Compra',d:c.desc+' · '+c.data.slice(8,10)+'/'+c.data.slice(5,7),v:+c.valor||0,compra:c.id,mk,movida:!!c.fatura&&c.fatura!==faturaMes(card,c.data)})));
   (S.cinfo.creditos||[]).filter(c=>c.cartao===card&&c.mes===F).forEach(c=>it.push({t:'Estorno',d:c.desc,v:-(+c.valor||0),id:c.id}));
   return {it,tot:r2(sum(it,x=>x.v))};
 }
@@ -2084,7 +2086,7 @@ const ACT = {
       {type:'row',items:[{name:'valor',label:'Valor',type:'money',req:true},{name:'data',label:'Data',type:'date',value:todayISO()}]},
       {name:'considera',label:'Se for resgate: entra como recebido no mês (saldo)?',type:'seg',options:[['sim','Sim, entra no saldo'],['nao','Não entra']],value:'sim'},
       {name:'obs',label:'Observação (opcional)'},
-    ], extra:'<div id="mv-saldo"></div>', onSubmit:v=>{
+    ], extra:'<div id="mv-pote"></div><div id="mv-saldo"></div>', onSubmit:v=>{
       const val=parseNum(v.valor); if(!val) return 'Informe um valor';
       const p=JSON.parse(JSON.stringify(S.potes[v.pote])); p.movimentos=p.movimentos||[]; const mv={id:uid('m'),data:v.data,tipo:v.tipo,valor:val,obs:v.obs.trim()};
       const noCartao=p.tipo!=='cartao';
@@ -2094,13 +2096,14 @@ const ACT = {
       p.movimentos.push(mv); save('potes',v.pote,p);
       toast(v.tipo==='aporte'?'Guardado em '+p.nome:v.tipo==='resgate'?'Resgate registrado · voltou ao saldo':'Rendimento lançado');
     }});
-    const up=()=>{ const el=document.getElementById('mv-saldo'); if(!el) return; const tp=(document.querySelector('#frm .seg[data-name="tipo"]')||{}).dataset?.value, pid=(document.getElementById('f-pote')||{}).value, pt=S.potes[pid], noCartao=!(pt&&pt.tipo==='cartao'), dt=(document.getElementById('f-data')||{}).value||todayISO(), val=parseNum((document.getElementById('f-valor')||{}).value);
+    const up=()=>{ const pe=document.getElementById('mv-pote'); if(pe){ const pp=S.potes[(document.getElementById('f-pote')||{}).value]; pe.innerHTML=pp?`<div class="sub" style="margin:-4px 0 10px">Na caixinha agora: <b>${fmt(potSaldo(pp))}</b></div>`:''; }
+      const el=document.getElementById('mv-saldo'); if(!el) return; const tp=(document.querySelector('#frm .seg[data-name="tipo"]')||{}).dataset?.value, pid=(document.getElementById('f-pote')||{}).value, pt=S.potes[pid], noCartao=!(pt&&pt.tipo==='cartao'), dt=(document.getElementById('f-data')||{}).value||todayISO(), val=parseNum((document.getElementById('f-valor')||{}).value);
       if(tp==='aporte') el.innerHTML=saldoBoxHtml(dt.slice(0,7),val,noCartao,'Não desconta do saldo');
       else if(tp==='resgate') el.innerHTML=saldoBoxHtml(dt.slice(0,7),-val,noCartao,'Não volta ao saldo');
       else el.innerHTML=saldoBoxHtml(dt.slice(0,7),0,false,'Rendimento fica na caixinha, não muda o saldo'); };
     ['f-valor','f-data','f-pote'].forEach(i=>{ const e=document.getElementById(i); if(e){ e.addEventListener('input',up); e.addEventListener('change',up); } });
     const sg=document.querySelector('#frm .seg[data-name="tipo"]'); if(sg) sg.addEventListener('click',()=>setTimeout(up,0));
-    { const b=document.getElementById('mv-saldo'), h=document.querySelector('#frm h3'); if(b&&h) h.after(b); } up();
+    { const b=document.getElementById('mv-saldo'), pb=document.getElementById('mv-pote'), h=document.querySelector('#frm h3'); if(h){ if(b) h.after(b); if(pb) h.after(pb); } } up();
   },
   'atualizar-saldo'(d){
     const p=S.potes[d.pote]; const s=potSaldo(p);
@@ -2124,6 +2127,12 @@ const ACT = {
   'copiar-mes'(d){
     const from=S.orc[d.from]; const pv=previstasDoMesAnterior(from); const o={mes:UI.month,renda:0,rendaPrevista:r2(sum(Object.values(pv),v=>v)),previstas:pv,recebidos:[],itens:(from.itens||[]).filter(i=>i.cat!=='poupanca'||true).map(i=>({id:uid('i'),cat:i.cat,nome:i.nome,previsto:r2(i.real||i.previsto),real:0})),avulsos:[]};
     save('orcamento',UI.month,o); toast(mLabel(UI.month)+' criado');
+  },
+  'sugestoes'(){
+    document.getElementById('more').classList.remove('open');
+    modal(`<h3>Sugestões</h3><p class="sub" style="margin:-6px 0 14px">Escreva o que pode melhorar no app, ou veja o que já chegou.</p>
+      <div class="stack" style="gap:10px"><button class="btn pri" data-act="sugerir">Escrever sugestão</button><button class="btn" data-act="ver-sugestoes">Ver sugestões recebidas</button></div>
+      <div class="foot"><button class="btn" data-close>Fechar</button></div>`);
   },
   'sugerir'(){
     document.getElementById('more').classList.remove('open');
@@ -2259,6 +2268,10 @@ const ACT = {
       <p class="sub" style="margin:0 0 10px;font-size:.86rem">Use para levar seus dados para a versão independente do app, ou para voltar um backup antigo.</p>
       <input type="file" id="imp-file" accept=".json,application/json">
       <div id="imp-confirm"></div>
+      <div style="border-top:1px solid var(--line);margin:18px 0 14px"></div>
+      <h3 style="font-size:1rem;margin-bottom:6px">Recuperar faturas antigas</h3>
+      <p class="sub" style="margin:0 0 10px;font-size:.86rem">Escolha um backup de antes da mudança para recalcular as faturas dos meses passados.</p>
+      <button class="btn" data-act="recuperar-faturas">Recuperar faturas do backup</button>
       <div class="foot"><button class="btn" data-close>Fechar</button></div>`);
   },
   'exportar'(){ exportBackup(); },
@@ -3271,7 +3284,7 @@ document.addEventListener('click', e=>{
   if(t.closest('[data-close]') || t.matches('[data-scrim]')){ closeModal(); return; }
   const mn = t.closest('[data-mnav]'); if(mn){ UI.month=addMonth(UI.month,+mn.dataset.mnav); render(); return; }
   const act = t.closest('[data-act]');
-  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
+  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes','sugestoes'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
   if(act){
     e.preventDefault();
     if(act.dataset.act==='apagar-pote'){ const id=act.dataset.pote; closeModal(); remove('potes',id); toast('Apagado'); return; }
