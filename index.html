@@ -2339,9 +2339,9 @@ function marcarGuardado(lista){
   lista.forEach(c=>{ const ci=cicloConta(c); if(((g[ci]||{})[c.id])) return; const r=guardarNaCaixinhaCartao(+c.valor||0,todayISO(),'Guardado para '+c.desc+' (fatura de '+MESES[+ci.slice(5)-1].toLowerCase()+')'); (g[ci]=g[ci]||{})[c.id]={...r,data:todayISO()}; });
   S.cinfo={...S.cinfo,guardados:g}; save('cartaoinfo','geral',S.cinfo);
 }
-function lancarCompraCartao({desc,valor,data,cartao,parcela,tipo,cat,guardado,projeto}){
+function lancarCompraCartao({desc,valor,data,cartao,parcela,tipo,cat,guardado,projeto,casal}){
   const mk=data.slice(0,7); const c=S.cartao[mk]?JSON.parse(JSON.stringify(S.cartao[mk])):{mes:mk,compras:[]}; const cid=uid('c');
-  const cp={id:cid,data,desc,valor,parcela:parcela||'',cartao}; if(cat) cp.cat=cat; if(projeto) cp.projeto=projeto; if(guardado) cp.guardado=true; c.compras.push(cp); save('cartao',mk,c);
+  const cp={id:cid,data,desc,valor,parcela:parcela||'',cartao}; if(cat) cp.cat=cat; if(projeto) cp.projeto=projeto; if(casal) cp.casal=true; if(guardado) cp.guardado=true; c.compras.push(cp); save('cartao',mk,c);
   if(cat){ S.config.regras={...(S.config.regras||{}),[chaveDesc(desc)]:cat}; save('config','geral',{...S.config}); }
   const fm=faturaMes(cartao,data), nomeF=MESES[+fm.slice(5)-1].toLowerCase(), nc=cartao==='MP'?'Mercado Pago':cartao;
   if(parcela){ addParcelaDeCompra({id:cid,data,desc,valor,parcela,cartao},tipo||'limite'); return 'Compra em '+parcela.toLowerCase()+' no '+nc+' · 1ª parcela na fatura de '+nomeF; }
@@ -3061,7 +3061,7 @@ function gastoRapido(pre={}){
   const cards=S.config.cartoes||['Nubank'];
   let forma = pre.forma || UI.lastForma || 'pix';
   if(forma.startsWith('card:') && !cards.includes(forma.slice(5))) forma='card:'+cards[0];
-  G={valor:'',desc:'',data:todayISO(),forma,parcela:'',projeto:pre.projeto||'',cat:pre.cat||null,item:null,mexeuCat:!!pre.cat,trocar:false,rec:!!pre.recorrente,guardado:pre.guardado!==undefined?!!pre.guardado:true,guardarAgora:true,guardaCompra:!!UI.lastGuardaCompra};
+  G={valor:'',desc:'',data:todayISO(),forma,parcela:'',projeto:pre.projeto||'',cat:pre.cat||null,item:null,mexeuCat:!!pre.cat,trocar:false,rec:!!pre.recorrente,casal:!!pre.casal,guardado:pre.guardado!==undefined?!!pre.guardado:true,guardarAgora:true,guardaCompra:!!UI.lastGuardaCompra};
   if(G.cat) G.item=itemPadrao(G.cat);
   renderGasto(true);
 }
@@ -3103,6 +3103,7 @@ function renderGasto(first){
     <div class="g-item" id="g-itemline">${G.trocar?`<select id="g-item" aria-label="Item">${[...new Set([item,...its])].map(n=>`<option ${n===item?'selected':''}>${esc(n)}</option>`).join('')}${descN&&!its.includes(descN)?`<option value="${esc(descN)}">+ novo item: ${esc(descN)}</option>`:''}</select>`:`Soma em <b>${esc(CAT[cat].n)} › ${esc(item)}</b> <button type="button" class="linkbtn" data-gtrocar>trocar item</button>`}</div>
     <div class="g-lbl">Como pagou</div>
     <div class="g-chips">${formas.map(([k,t,ic])=>`<button type="button" class="g-chip" data-gforma="${esc(k)}" aria-pressed="${G.forma===k}"><span>${ic}</span>${esc(t)}</button>`).join('')}</div>
+    ${C.on?`<label class="g-rec"><input type="checkbox" id="g-casal" ${G.casal?'checked':''}> <span><span class="emo">👫</span> <b>Compra do casal</b> <span class="muted">· aparece na tela do Casal</span></span></label>`:''}
     <label class="g-rec"><input type="checkbox" id="g-rec" ${G.rec?'checked':''}> <span><span class="emo">🔁</span> <b>Conta recorrente</b> <span class="muted">· cai todo mês (Vivo, internet, streaming…)</span></span></label>
     ${G.rec&&ehCard?`<div class="g-lbl">O dinheiro dessa conta fica guardado na caixinha?</div><div class="g-parc">${[[1,'Sim, guardo na caixinha'],[0,'Não, só cai no cartão']].map(([k,t])=>`<button type="button" class="g-pchip" data-gguard="${k}" aria-pressed="${G.guardado===!!k}">${t}</button>`).join('')}</div>${G.guardado&&potesList().some(p=>p.tipo==='cartao')?`<label class="g-rec" style="margin-top:6px"><input type="checkbox" id="g-agora" ${G.guardarAgora?'checked':''}> <span class="muted">Já guardei o valor deste mês na caixinha do cartão</span></label>`:''}`:''}
     ${ehCard&&!G.rec?`<div class="g-lbl">Guardou o dinheiro dessa compra na caixinha?</div><div class="g-parc">${[[1,'Sim, guardei na caixinha'],[0,'Não']].map(([k,t])=>`<button type="button" class="g-pchip" data-gguardc="${k}" aria-pressed="${G.guardaCompra===!!k}">${t}</button>`).join('')}</div><div class="g-lbl">Parcelas</div>`:''}
@@ -3121,6 +3122,7 @@ function renderGasto(first){
   dEl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); salvarGasto(); } });
   const dt=document.getElementById('g-data'); dt.addEventListener('change',()=>{ G.data=dt.value||todayISO(); document.getElementById('g-nota').innerHTML=gNota(); atualizarSaldoG(); });
   document.getElementById('g-rec').addEventListener('change',e=>{ lerG(); G.rec=e.target.checked; if(G.rec) G.parcela=''; renderGasto(); });
+  const gcs=document.getElementById('g-casal'); if(gcs) gcs.addEventListener('change',e=>{ G.casal=e.target.checked; });
   const ag=document.getElementById('g-agora'); if(ag) ag.addEventListener('change',()=>{ G.guardarAgora=ag.checked; atualizarSaldoG(); });
   root.querySelector('.sheet').addEventListener('click',e=>{
     const c=e.target.closest('[data-gcat]'); if(c){ lerG(); G.cat=c.dataset.gcat; G.item=itemPadrao(G.cat); G.mexeuCat=true; G.trocar=false; renderGasto(); return; }
@@ -3159,14 +3161,14 @@ function salvarGasto(){
     closeModal(); toast(desc+' agora cai todo mês no '+(card==='MP'?'Mercado Pago':card)+(G.guardado&&G.guardarAgora&&cx?' · '+fmt(val)+' guardado na caixinha':'')); return; }
   if(G.forma.startsWith('card:')){
     UI.lastGuardaCompra=G.guardaCompra;
-    let msg=lancarCompraCartao({desc,valor:val,data,cartao:G.forma.slice(5),parcela:G.parcela,tipo:G.guardaCompra?'guardado':'limite',cat:cat+'|'+item,guardado:G.guardaCompra,projeto:G.projeto||''});
+    let msg=lancarCompraCartao({desc,valor:val,data,cartao:G.forma.slice(5),parcela:G.parcela,tipo:G.guardaCompra?'guardado':'limite',cat:cat+'|'+item,guardado:G.guardaCompra,projeto:G.projeto||'',casal:!!G.casal});
     if(G.guardaCompra){ const r=guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); const mk=data.slice(0,7), q=JSON.parse(JSON.stringify(S.cartao[mk])), x=q.compras[q.compras.length-1]; if(x){ x.cxPote=r.pote; x.cxMov=r.mov; save('cartao',mk,q); } msg+=' · '+fmt(val)+' entrou na caixinha do cartão'; }
     closeModal(); toast(msg); return; }
   const mk=data.slice(0,7); const o=orcPara(mk); o.itens=o.itens||[]; o.avulsos=o.avulsos||[];
   let it=itemPorNome(o,cat,item); if(!it){ it={id:uid('i'),cat,nome:item,previsto:0,real:0}; o.itens.push(it); }
   it.real=r2((+it.real||0)+val);
   if(G.rec){ it.previsto=val; it.fixo=true; }
-  o.avulsos.push({id:uid('a'),data,desc,valor:val,forma:G.forma,cat,itemId:it.id,...(G.projeto?{projeto:G.projeto}:{})});
+  o.avulsos.push({id:uid('a'),data,desc,valor:val,forma:G.forma,cat,itemId:it.id,...(G.projeto?{projeto:G.projeto}:{}),...(G.casal?{casal:true}:{})});
   save('orcamento',mk,o); if(G.desc.trim()) save('config','geral',{...S.config});
   closeModal(); toast(fmt(val)+' em '+CAT_CURTO[cat]+' › '+it.nome+(G.rec?' · previsto todo mês':'')+(mk!==UI.month?' ('+mLabel(mk)+')':''));
 }
