@@ -2116,7 +2116,7 @@ const ACT = {
     form({title:'Sugerir melhoria', submit:'Enviar', fields:[{name:'texto',label:'O que pode melhorar no app?',req:true}],
       onSubmit:v=>{ const texto=(v.texto||'').trim(); if(!texto) return 'Escreva a sugestão';
         if(texto.length>2000) return 'Texto muito longo (máximo 2000 letras)';
-        firebase.firestore().collection('sugestoes').add({texto, nome:(ME&&ME.nome)||'', tela:UI.view, data:todayISO(), criadoEm:firebase.firestore.FieldValue.serverTimestamp()})
+        const u=firebase.auth().currentUser; firebase.firestore().collection('sugestoes').add({texto, nome:((u&&u.displayName)||'').split(' ')[0]||'Alguém', tela:UI.view, data:todayISO(), criadoEm:firebase.firestore.FieldValue.serverTimestamp()})
           .then(()=>toast('Sugestão enviada, obrigada!')).catch(e=>toast('Não enviou: '+((e&&(e.code||e.message))||'erro desconhecido')));
       }});
   },
