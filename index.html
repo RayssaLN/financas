@@ -781,6 +781,14 @@ function head(eyebrow, title, sub, right=''){
 }
 
 /* ================= views ================= */
+const QA_OPTS=[
+  {id:'novo-gasto',n:'Lançar gasto',i:'gastos'},
+  {id:'novo-recebido',n:'Recebidos',i:'plus'},
+  {id:'novo-mov',n:'Guardar dinheiro',i:'cx'},
+  {id:'nova-compra',n:'Compra no cartão',i:'cartao'},
+  {id:'importar-extrato',n:'Importar extrato',i:'gastos'},
+  {id:'melimais',n:'Meli+',i:'estrela',go:true}];
+function inicioQuickIds(){ const v=(S.config.inicioQuick||['novo-gasto','novo-recebido','novo-mov','melimais']).filter(id=>QA_OPTS.some(o=>o.id===id)); return v.length?v:['novo-gasto','novo-recebido','novo-mov','melimais']; }
 function vInicio(){
   const mk = UI.month, t = orcTotals(orcOf(mk));
   const fat = faturaOf(mk);
@@ -793,12 +801,8 @@ function vInicio(){
   const hello = hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite';
   let h = head(readonlyView()?`Finanças de ${esc(nomeParceiro())}`:`${hello}, ${esc(meuNome())}`, 'Tudo em um só lugar', `Resumo de ${mLabel(mk).toLowerCase()}`, monthPicker());
   if (S.offline) h += `<div class="banner">Não consegui conectar ao Firebase. Confira a internet e o arquivo firebase-config.js.</div>`;
-  h += `<div class="quick">
-    <button class="qa" data-act="novo-gasto">${'<i>'+svg('gastos')+'</i>'}Lançar gasto</button>
-    <button class="qa" data-act="novo-recebido">${'<i>'+svg('plus')+'</i>'}Recebidos</button>
-    <button class="qa" data-act="novo-mov">${'<i>'+svg('cx')+'</i>'}Guardar dinheiro</button>
-    <button class="qa" data-go="melimais">${'<i>'+svg('estrela')+'</i>'}Meli+</button>
-  </div>`;
+  const qaIds=inicioQuickIds();
+  h += `<div class="quick">${qaIds.map(id=>{ const o=QA_OPTS.find(x=>x.id===id); return `<button class="qa" ${o.go?`data-go="${o.id}"`:`data-act="${o.id}"`}>${'<i>'+svg(o.i)+'</i>'}${o.n}</button>`; }).join('')}<button class="qa" data-act="editar-inicio">${'<i>'+svg('pencil')+'</i>'}Editar atalhos</button></div>`;
   h += `<div class="grid g4">
     <div class="card stat hero" style="cursor:pointer" data-go="gastos" title="Ver Gastos do mês"><div class="lbl">Sobrou no mês</div><div class="val ${t.saldo>=0?'pos':'neg'}">${fmt(t.saldo)}</div><div class="ft">Entrou ${fmt(t.renda)} · saiu ${fmt(t.desp)}</div></div>
     ${(()=>{ const F=mk, inf=(S.cinfo.faturas||{})[F]||{}; const cs=[...new Set([...cartoesFatura(),...Object.keys(inf)])].map(c=>({c,banco:inf[c]!=null,v:inf[c]!=null?+inf[c]:composicaoFatura(c,F).tot})).filter(x=>x.v>0.004); const tot=sum(cs,x=>x.v); const prev=cs.some(x=>!x.banco); return `<div class="card stat" style="cursor:pointer" data-go="cartao" data-fatmes="${F}" title="Ver a fatura no Cartão de crédito"><div class="lbl">Fatura de ${mShort(F)}${prev&&cs.length?' <span style="text-transform:none;letter-spacing:0;font-weight:500">· prevista</span>':''}</div><div class="val">${fmt(tot)}</div><div class="ft">${cs.length?cs.map(x=>(x.c==='MP'?'MP':esc(x.c))+' '+fmt(x.v)).join(' · '):'Nada no cartão'}</div></div>`; })()}
@@ -2127,6 +2131,18 @@ const ACT = {
   'copiar-mes'(d){
     const from=S.orc[d.from]; const pv=previstasDoMesAnterior(from); const o={mes:UI.month,renda:0,rendaPrevista:r2(sum(Object.values(pv),v=>v)),previstas:pv,recebidos:[],itens:(from.itens||[]).filter(i=>i.cat!=='poupanca'||true).map(i=>({id:uid('i'),cat:i.cat,nome:i.nome,previsto:r2(i.real||i.previsto),real:0})),avulsos:[]};
     save('orcamento',UI.month,o); toast(mLabel(UI.month)+' criado');
+  },
+  'editar-inicio'(){
+    const cur=inicioQuickIds();
+    modal(`<h3>Atalhos da tela Início</h3><p class="sub" style="margin:-6px 0 14px">Escolha o que aparece nos botões de cima (até 6).</p>
+      <div class="stack" style="gap:10px">${QA_OPTS.map(o=>`<label class="g-rec" style="margin:0"><input type="checkbox" data-qa-chk="${o.id}" ${cur.includes(o.id)?'checked':''}> <span>${o.n}</span></label>`).join('')}</div>
+      <div class="actions" style="margin-top:16px"><button class="btn pri" data-act="salvar-inicio">Salvar</button></div>`);
+  },
+  'salvar-inicio'(){
+    const ids=[...document.querySelectorAll('[data-qa-chk]')].filter(c=>c.checked).map(c=>c.dataset.qaChk);
+    if(!ids.length){ toast('Escolha pelo menos um atalho'); return; }
+    if(ids.length>6){ toast('Máximo de 6 atalhos'); return; }
+    save('config','geral',{...S.config, inicioQuick:ids}); closeModal(); toast('Atalhos salvos');
   },
   'sugestoes'(){
     document.getElementById('more').classList.remove('open');
