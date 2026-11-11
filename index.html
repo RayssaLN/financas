@@ -3422,7 +3422,7 @@ document.addEventListener('click', e=>{
   if(act){
     e.preventDefault();
     if(act.dataset.act==='apagar-pote'){ const id=act.dataset.pote; closeModal(); remove('potes',id); toast('Apagado'); return; }
-    const inModal = act.closest('.sheet'); if(inModal && !['apagar-mes-ok','menu-salvar','renda-add','renda-padrao','renda-salvar'].includes(act.dataset.act)) closeModal();
+    const inModal = act.closest('.sheet'); if(inModal && !['apagar-mes-ok','menu-salvar','renda-add','renda-padrao','renda-salvar','salvar-inicio'].includes(act.dataset.act)) closeModal();
     ACT[act.dataset.act] && ACT[act.dataset.act]({...act.dataset}); return;
   }
   const pp = t.closest('[data-pal-pick]'); if(pp){ const k=pp.dataset.palPick; applyPal(k); save('config','geral',{...S.config,paleta:k}); ACT.cores(); toast('Cores: '+PALETTES[k].n); return; }
