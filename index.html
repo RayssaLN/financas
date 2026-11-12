@@ -247,6 +247,14 @@ h2{font-family:var(--display);font-weight:600;font-size:1.08rem;margin:0;letter-
 .tbl-wrap.fit th,.tbl-wrap.fit td{white-space:normal;font-size:.8rem;padding:8px 3px;word-break:break-word}
 .tbl-wrap.fit td.r{white-space:nowrap;font-size:.74rem}
 .tbl-wrap.fit th.r{white-space:normal;text-align:right}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal-grid .wd{font-size:.68rem;color:var(--muted);font-weight:600;padding:4px 0}
+.cal-d{border:1px solid transparent;border-radius:10px;padding:6px 0 4px;min-height:44px;background:none;color:var(--ink);font:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:default}
+.cal-d.has{cursor:pointer;background:var(--surface-2)}
+.cal-d.hoje{border-color:var(--accent)}
+.cal-d.sel{background:var(--accent);color:var(--accent-ink)}
+.cal-d .dots{display:flex;gap:3px;justify-content:center;min-height:6px}
+.cal-d .dots i{width:6px;height:6px;border-radius:50%;display:block}
 .tbl-wrap.fit th{font-size:.64rem;letter-spacing:.03em}
 table{width:100%;border-collapse:collapse;font-size:.88rem}
 th,td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -828,6 +836,34 @@ function resumoCasalHtml(mk){
     </tbody></table></div>
     <p class="muted" style="font-size:.8rem;margin:8px 0 0">${ele?'Total dos dois: '+fmt(tot(eu)+tot(ele)):'Ainda não recebi os gastos de '+esc(nomeParceiro())+'. Ele precisa abrir o app atualizado para aparecer aqui.'}</p></div>`;
 }
+function contasDoMesCal(mk){
+  const itens=[];
+  const cards=[...new Set([...(S.config.cartoes||[]),...cartoesFatura()])];
+  cards.forEach(c=>{ const comp=composicaoFatura(c,mk); if(!comp||!comp.tot) return; const cf=cartaoDatas(c);
+    itens.push({dia:cf&&cf.vence?cf.vence:null, v:comp.tot, t:'Fatura '+(c==='MP'?'Mercado Pago':c), paga:!!((S.cinfo.pagas||{})[mk]||{})[c], cor:'var(--gold)'}); });
+  emprList().forEach(e=>{ if(!e.inicio) return; const n=(e.valores||[]).length;
+    for(let k=0;k<n;k++){ if(addMonth(e.inicio,k)!==mk) continue;
+      const rec=emprTipo(e)==='emprestei';
+      itens.push({dia:e.dia||null, v:e.valores[k], t:(rec?'Receber de ':'Pagar a ')+(e.quem||e.desc)+(n>1?' '+(k+1)+'/'+n:''), paga:k<emprPago(e), cor:rec?'var(--accent)':'#b3413a', rec}); } });
+  return itens;
+}
+function calendarioContasHtml(mk){
+  const itens=contasDoMesCal(mk), ano=+mk.slice(0,4), mes=+mk.slice(5,7);
+  const dias=new Date(ano,mes,0).getDate(), ini=new Date(ano,mes-1,1).getDay();
+  const hoje=todayISO(), selDia=(UI.calDia&&UI.calDia.mk===mk)?UI.calDia.dia:null;
+  const porDia={}; itens.forEach(x=>{ if(x.dia) (porDia[x.dia]=porDia[x.dia]||[]).push(x); });
+  const cel=[]; for(let i=0;i<ini;i++) cel.push('<span></span>');
+  for(let d=1;d<=dias;d++){ const l=porDia[d]||[], iso=mk+'-'+String(d).padStart(2,'0'), tem=l.length>0;
+    cel.push(`<button class="cal-d ${tem?'has':''} ${iso===hoje?'hoje':''} ${selDia===d?'sel':''}" ${tem?`data-act="cal-dia" data-dia="${d}"`:'tabindex="-1"'}><span style="font-size:.85rem;font-weight:${tem?700:500}">${d}</span><span class="dots">${l.slice(0,3).map(x=>`<i style="background:${x.paga?'var(--muted)':x.cor}"></i>`).join('')}</span></button>`); }
+  const sem=itens.filter(x=>!x.dia), lista=(selDia?itens.filter(x=>x.dia===selDia):itens.filter(x=>x.dia)).sort((a,b)=>(a.dia||99)-(b.dia||99));
+  const aPagar=sum(itens.filter(x=>!x.paga&&!x.rec),x=>x.v), aReceber=sum(itens.filter(x=>!x.paga&&x.rec),x=>x.v);
+  const linha=x=>`<div class="row"><div class="grow"><div class="t" style="${x.paga?'text-decoration:line-through;opacity:.6':''}"><i class="dot" style="background:${x.cor}"></i> ${esc(x.t)}</div><div class="muted" style="font-size:.8rem">${x.dia?'Dia '+x.dia:'Sem dia de vencimento'} · ${x.paga?'paga':'falta pagar'}</div></div><div class="val sm" style="font-size:.95rem">${fmt(x.v)}</div></div>`;
+  return `<div class="card section"><div class="card-h"><div><h2>Calendário de contas</h2><p>${mLabel(mk)} · falta pagar ${fmt(aPagar)}${aReceber?' · a receber '+fmt(aReceber):''}${selDia?' · dia '+selDia+' selecionado (toque de novo para ver o mês)':''}</p></div></div>
+    <div class="cal-grid">${['D','S','T','Q','Q','S','S'].map(w=>`<span class="wd">${w}</span>`).join('')}${cel.join('')}</div>
+    ${lista.length?`<div class="rows" style="margin-top:12px">${lista.map(linha).join('')}</div>`:'<p class="muted" style="margin:12px 0 0">Nenhuma conta com dia de vencimento neste mês.</p>'}
+    ${sem.length&&!selDia?`<div class="rows" style="margin-top:10px">${sem.map(linha).join('')}</div><p class="muted" style="font-size:.78rem;margin:6px 0 0">Sem dia cadastrado: informe o dia que vence em Cartão → Datas, ou no empréstimo.</p>`:''}
+  </div>`;
+}
 function vInicio(){
   const mk = UI.month, t = orcTotals(orcOf(mk));
   const fat = faturaOf(mk);
@@ -863,6 +899,7 @@ function vInicio(){
     <div class="card"><div class="card-h"><div><h2>Para onde foi o dinheiro</h2><p>${mLabel(mk)}, por categoria</p></div></div>
       ${cats.length? `<div class="alloc" style="margin-bottom:14px">${cats.map(c=>`<i style="width:${c.v/t.desp*100}%;background:${c.c}" data-tip="${esc(c.n)}: ${esc(fmt(c.v))}"></i>`).join('')}</div><div class="rows">${cats.map(c=>`<div class="row" style="padding:7px 0"><i class="dot" style="background:${c.c}"></i><div class="grow">${c.n}</div><span class="muted num" style="font-size:.8rem">${pct(c.v/t.desp)}</span><span class="v">${fmt(c.v)}</span></div>`).join('')}</div>` : `<div class="empty"><p>Nada lançado neste mês ainda.</p><button class="btn pri" data-go="gastos">Abrir gastos do mês</button></div>`}
     </div>
+    ${calendarioContasHtml(mk)}
     ${resumoCasalHtml(mk)}
   </div>`;
   if(RA.table) h += `<div class="section">${RA.table}</div>`;
@@ -2171,6 +2208,7 @@ const ACT = {
     const from=S.orc[d.from]; const pv=previstasDoMesAnterior(from); const o={mes:UI.month,renda:0,rendaPrevista:r2(sum(Object.values(pv),v=>v)),previstas:pv,recebidos:[],itens:(from.itens||[]).filter(i=>i.cat!=='poupanca'||true).map(i=>({id:uid('i'),cat:i.cat,nome:i.nome,previsto:r2(i.real||i.previsto),real:0})),avulsos:[]};
     save('orcamento',UI.month,o); toast(mLabel(UI.month)+' criado');
   },
+  'cal-dia'(d){ const dia=+d.dia; UI.calDia=(UI.calDia&&UI.calDia.mk===UI.month&&UI.calDia.dia===dia)?null:{mk:UI.month,dia}; render(); },
   'editar-inicio'(){
     const cur=inicioQuickIds();
     modal(`<h3>Atalhos da tela Início</h3><p class="sub" style="margin:-6px 0 14px">Escolha o que aparece nos botões de cima (até 6).</p>
@@ -3418,7 +3456,7 @@ document.addEventListener('click', e=>{
   if(t.closest('[data-close]') || t.matches('[data-scrim]')){ closeModal(); return; }
   const mn = t.closest('[data-mnav]'); if(mn){ UI.month=addMonth(UI.month,+mn.dataset.mnav); render(); return; }
   const act = t.closest('[data-act]');
-  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes','sugestoes'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
+  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes','sugestoes','cal-dia'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
   if(act){
     e.preventDefault();
     if(act.dataset.act==='apagar-pote'){ const id=act.dataset.pote; closeModal(); remove('potes',id); toast('Apagado'); return; }
