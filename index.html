@@ -1334,11 +1334,11 @@ function composicaoViva(card,F){
   (S.cinfo.creditos||[]).filter(c=>c.cartao===card&&c.mes===F).forEach(c=>it.push({t:'Estorno',d:c.desc,v:-(+c.valor||0),id:c.id}));
   return {it,tot:r2(sum(it,x=>x.v))};
 }
-function lancarNoGasto(cat,nome,val,data,desc){
+function lancarNoGasto(cat,nome,val,data,desc,contaAgendadaId){
   // soma no Real do item (cria se não existir) e registra na lista do mês; devolve a referência para desfazer
   const mk=data.slice(0,7); const o=orcPara(mk); o.itens=o.itens||[]; o.avulsos=o.avulsos||[];
   let it=itemPorNome(o,cat,nome); if(!it){ it={id:uid('i'),cat,nome,previsto:0,real:0}; o.itens.push(it); }
-  it.real=r2((+it.real||0)+val); const aid=uid('a'); o.avulsos.push({id:aid,data,desc:desc||nome,valor:val,forma:'pix',cat,itemId:it.id});
+  it.real=r2((+it.real||0)+val); const aid=uid('a'); o.avulsos.push({id:aid,data,desc:desc||nome,valor:val,forma:'pix',cat,itemId:it.id,...(contaAgendadaId?{contaAgendadaId}: {})});
   save('orcamento',mk,o); return {mes:mk,item:it.id,avulso:aid,valor:val};
 }
 function tirarDoGasto(ref){
@@ -2346,7 +2346,7 @@ const ACT = {
     if(d.kind==='ag'){
       const lst=S.config.contasAgendadas||[], x=lst.find(a=>a.id===d.id); if(!x||x.pagaEm){ closeModal(); return; }
       if(forma.startsWith('card:')){ lancarCompraCartao({desc:x.desc,valor:x.valor,data:hoje,cartao:forma.slice(5),parcela:'',tipo:'limite',cat:x.cat+'|'+x.item,guardado:false,projeto:'',casal:false}); }
-      else { const ref=lancarNoGasto(x.cat,x.item,x.valor,hoje,x.desc);
+      else { const ref=lancarNoGasto(x.cat,x.item,x.valor,hoje,x.desc,x.id);
         if(ref&&S.orc[ref.mes]){ const o=JSON.parse(JSON.stringify(S.orc[ref.mes])); const av=(o.avulsos||[]).find(a=>a.id===ref.avulso); if(av){ av.forma=forma; save('orcamento',ref.mes,o); } } }
       S.config={...S.config,contasAgendadas:lst.map(a=>a.id===x.id?{...a,pagaEm:hoje,pagaForma:forma}:a)}; save('config','geral',S.config);
       closeModal(); toast(x.desc+' paga · '+fmt(x.valor)+' · '+formaNome(forma)); return; }
@@ -2360,7 +2360,7 @@ const ACT = {
   },
   'agendada-pagar'(d){
     const lst=S.config.contasAgendadas||[], x=lst.find(a=>a.id===d.id); if(!x||x.pagaEm) return;
-    const hoje=todayISO(); const ref=lancarNoGasto(x.cat,x.item,x.valor,hoje,x.desc);
+    const hoje=todayISO(); const ref=lancarNoGasto(x.cat,x.item,x.valor,hoje,x.desc,x.id);
     if(ref&&ref.mes&&S.orc[ref.mes]){ const o=JSON.parse(JSON.stringify(S.orc[ref.mes])); const av=(o.avulsos||[]).find(a=>a.id===ref.avulso); if(av){ av.forma=x.forma||'pix'; save('orcamento',ref.mes,o); } }
     S.config={...S.config,contasAgendadas:lst.map(a=>a.id===x.id?{...a,pagaEm:hoje}:a)}; save('config','geral',S.config);
     toast(x.desc+' paga · '+fmt(x.valor)+' em Gastos do mês'); },
@@ -3703,7 +3703,7 @@ document.addEventListener('click', e=>{
   const ix = t.closest('[data-incx]'); if(ix){ UI.incluirCx = ix.dataset.incx==='1'; render(); return; }
   const di = t.closest('[data-del-item]'); if(di){ const o=ensureOrc(UI.month); o.itens=o.itens.filter(i=>i.id!==di.dataset.delItem); save('orcamento',UI.month,o); toast('Item apagado'); return; }
   const cavu = t.closest('[data-cat-avulso]'); if(cavu){ avulsoCatForm(cavu.dataset.catAvulso); return; }
-  const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
+  const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); if(a&&a.contaAgendadaId){ S.config={...S.config,contasAgendadas:(S.config.contasAgendadas||[]).filter(x=>x.id!==a.contaAgendadaId)}; save('config','geral',S.config); } toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
   const gc = t.closest('[data-guardar-compra]'); if(gc){ if(readonlyView()) return save(); const gx=(S.cartao[gc.dataset.mk]?.compras||[]).find(q=>q.id===gc.dataset.guardarCompra); if(gx&&gx.guardado) toggleGuardarCompra(gx.id,gc.dataset.mk); else guardarCompraForm(gc.dataset.guardarCompra, gc.dataset.mk); return; }
   const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); const del=c.compras.find(x=>x.id===dc.dataset.delCompra); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if(del&&del.guardado) tirarDaCaixinha(del); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
   const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
