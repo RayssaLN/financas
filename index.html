@@ -845,6 +845,7 @@ function contasDoMesCal(mk){
     for(let k=0;k<n;k++){ if(addMonth(e.inicio,k)!==mk) continue;
       const rec=emprTipo(e)==='emprestei';
       itens.push({dia:e.dia||null, v:e.valores[k], t:(rec?'Receber de ':'Pagar a ')+(e.quem||e.desc)+(n>1?' '+(k+1)+'/'+n:''), paga:k<emprPago(e), cor:rec?'var(--accent)':'#b3413a', rec}); } });
+  (S.config.contasAgendadas||[]).forEach(x=>{ if(!x.venc||x.venc.slice(0,7)!==mk) return; itens.push({dia:+x.venc.slice(8,10), v:x.valor, t:'Conta '+x.desc, paga:!!x.pagaEm, cor:'#b3413a', ag:x.id}); });
   return itens;
 }
 function calendarioContasHtml(mk){
@@ -857,7 +858,7 @@ function calendarioContasHtml(mk){
     cel.push(`<button class="cal-d ${tem?'has':''} ${iso===hoje?'hoje':''} ${selDia===d?'sel':''}" ${tem?`data-act="cal-dia" data-dia="${d}"`:'tabindex="-1"'}><span style="font-size:.85rem;font-weight:${tem?700:500}">${d}</span><span class="dots">${l.slice(0,3).map(x=>`<i style="background:${x.paga?'var(--muted)':x.cor}"></i>`).join('')}</span></button>`); }
   const sem=itens.filter(x=>!x.dia), lista=(selDia?itens.filter(x=>x.dia===selDia):itens.filter(x=>x.dia)).sort((a,b)=>(a.dia||99)-(b.dia||99));
   const aPagar=sum(itens.filter(x=>!x.paga&&!x.rec),x=>x.v), aReceber=sum(itens.filter(x=>!x.paga&&x.rec),x=>x.v);
-  const linha=x=>`<div class="row"><div class="grow"><div class="t" style="${x.paga?'text-decoration:line-through;opacity:.6':''}"><i class="dot" style="background:${x.cor}"></i> ${esc(x.t)}</div><div class="muted" style="font-size:.8rem">${x.dia?'Dia '+x.dia:'Sem dia de vencimento'} · ${x.paga?'paga':'falta pagar'}</div></div><div class="val sm" style="font-size:.95rem">${fmt(x.v)}</div></div>`;
+  const linha=x=>`<div class="row"><div class="grow"><div class="t" style="${x.paga?'text-decoration:line-through;opacity:.6':''}"><i class="dot" style="background:${x.cor}"></i> ${esc(x.t)}</div><div class="muted" style="font-size:.8rem">${x.dia?'Dia '+x.dia:'Sem dia de vencimento'} · ${x.paga?'paga':'falta pagar'}</div></div><div class="val sm" style="font-size:.95rem">${fmt(x.v)}</div>${x.ag&&!x.paga?`<button class="btn sm pri" style="margin-left:8px" data-act="agendada-pagar" data-id="${esc(x.ag)}">Paguei</button>`:''}</div>`;
   return `<div class="card section"><div class="card-h"><div><h2>Calendário de contas</h2><p>${mLabel(mk)} · falta pagar ${fmt(aPagar)}${aReceber?' · a receber '+fmt(aReceber):''}${selDia?' · dia '+selDia+' selecionado (toque de novo para ver o mês)':''}</p></div></div>
     <div class="cal-grid">${['D','S','T','Q','Q','S','S'].map(w=>`<span class="wd">${w}</span>`).join('')}${cel.join('')}</div>
     ${lista.length?`<div class="rows" style="margin-top:12px">${lista.map(linha).join('')}</div>`:'<p class="muted" style="margin:12px 0 0">Nenhuma conta com dia de vencimento neste mês.</p>'}
@@ -2208,6 +2209,12 @@ const ACT = {
     const from=S.orc[d.from]; const pv=previstasDoMesAnterior(from); const o={mes:UI.month,renda:0,rendaPrevista:r2(sum(Object.values(pv),v=>v)),previstas:pv,recebidos:[],itens:(from.itens||[]).filter(i=>i.cat!=='poupanca'||true).map(i=>({id:uid('i'),cat:i.cat,nome:i.nome,previsto:r2(i.real||i.previsto),real:0})),avulsos:[]};
     save('orcamento',UI.month,o); toast(mLabel(UI.month)+' criado');
   },
+  'agendada-pagar'(d){
+    const lst=S.config.contasAgendadas||[], x=lst.find(a=>a.id===d.id); if(!x||x.pagaEm) return;
+    const hoje=todayISO(); const ref=lancarNoGasto(x.cat,x.item,x.valor,hoje,x.desc);
+    if(ref&&ref.mes&&S.orc[ref.mes]){ const o=JSON.parse(JSON.stringify(S.orc[ref.mes])); const av=(o.avulsos||[]).find(a=>a.id===ref.avulso); if(av){ av.forma=x.forma||'pix'; save('orcamento',ref.mes,o); } }
+    S.config={...S.config,contasAgendadas:lst.map(a=>a.id===x.id?{...a,pagaEm:hoje}:a)}; save('config','geral',S.config);
+    toast(x.desc+' paga · '+fmt(x.valor)+' em Gastos do mês'); },
   'cal-dia'(d){ const dia=+d.dia; UI.calDia=(UI.calDia&&UI.calDia.mk===UI.month&&UI.calDia.dia===dia)?null:{mk:UI.month,dia}; render(); },
   'editar-inicio'(){
     const cur=inicioQuickIds();
@@ -3281,14 +3288,15 @@ function gastoRapido(pre={}){
   const cards=S.config.cartoes||['Nubank'];
   let forma = pre.forma || UI.lastForma || 'pix';
   if(forma.startsWith('card:') && !cards.includes(forma.slice(5))) forma='card:'+cards[0];
-  G={valor:'',desc:'',data:todayISO(),forma,parcela:'',projeto:pre.projeto||'',cat:pre.cat||null,item:null,mexeuCat:!!pre.cat,trocar:false,rec:!!pre.recorrente,casal:!!pre.casal,guardado:pre.guardado!==undefined?!!pre.guardado:true,guardarAgora:true,guardaCompra:!!UI.lastGuardaCompra};
+  G={valor:'',desc:'',data:todayISO(),forma,parcela:'',projeto:pre.projeto||'',cat:pre.cat||null,item:null,mexeuCat:!!pre.cat,trocar:false,rec:!!pre.recorrente,casal:!!pre.casal,guardado:pre.guardado!==undefined?!!pre.guardado:true,guardarAgora:true,guardaCompra:!!UI.lastGuardaCompra,agendar:false,vencDia:''};
   if(G.cat) G.item=itemPadrao(G.cat);
   renderGasto(true);
 }
 function lerG(){ const v=id=>{ const e=document.getElementById(id); return e?e.value:null; };
-  if(v('g-valor')!==null) G.valor=v('g-valor'); if(v('g-desc')!==null) G.desc=v('g-desc'); if(v('g-data')) G.data=v('g-data'); if(v('g-item')) G.item=v('g-item'); }
+  if(v('g-valor')!==null) G.valor=v('g-valor'); if(v('g-desc')!==null) G.desc=v('g-desc'); if(v('g-data')) G.data=v('g-data'); if(v('g-item')) G.item=v('g-item'); if(v('g-venc')!==null) G.vencDia=v('g-venc'); }
 function valeCarteiras(){ return (C.fundo&&C.fundo.carteiras||[]).filter(c=>c.tipo==='alelo'); }
 function gNota(){
+  if(G.agendar&&!G.rec&&!G.forma.startsWith('card:')&&!G.forma.startsWith('vale:')) return 'Não mexe no saldo agora. A conta aparece no <b>Calendário de contas</b> no dia do vencimento, e quando você tocar em <b>Paguei</b> ela entra em Gastos do mês.';
   if(G.forma.startsWith('vale:')) return 'Entra no <b>Rolê</b> como gasto do vale e aparece em Gastos do mês e no Casal. Não mexe no saldo.';
   if(G.rec){ if(!G.forma.startsWith('card:')) return 'Entra agora na lista de compras e fica como <b>previsto todo mês</b> nesse item de Gastos do mês.';
     const c=G.forma.slice(5), fm=faturaMes(c,G.data||todayISO()); return `Vai para <b>Contas no cartão</b> e entra em toda fatura do ${c==='MP'?'Mercado Pago':esc(c)}, a partir da de <b>${MESES[+fm.slice(5)-1].toLowerCase()}</b>.${G.guardado?' Entra em Gastos do mês quando você tocar em <b>Guardei</b>.':' Aparece em Cartão de crédito › Compras do mês, por categoria.'}`; }
@@ -3325,6 +3333,7 @@ function renderGasto(first){
     <div class="g-chips">${formas.map(([k,t,ic])=>`<button type="button" class="g-chip" data-gforma="${esc(k)}" aria-pressed="${G.forma===k}"><span>${ic}</span>${esc(t)}</button>`).join('')}</div>
     ${C.on?`<label class="g-rec"><input type="checkbox" id="g-casal" ${G.casal?'checked':''}> <span><span class="emo">👫</span> <b>Compra do casal</b> <span class="muted">· aparece na tela do Casal</span></span></label>`:''}
     <label class="g-rec"><input type="checkbox" id="g-rec" ${G.rec?'checked':''}> <span><span class="emo">🔁</span> <b>Conta recorrente</b> <span class="muted">· cai todo mês (Vivo, internet, streaming…)</span></span></label>
+    ${!G.rec&&!ehCard&&!G.forma.startsWith('vale:')?`<label class="g-rec"><input type="checkbox" id="g-agend" ${G.agendar?'checked':''}> <span><span class="emo">⏳</span> <b>Ainda não paguei</b> <span class="muted">· vai pro Calendário de contas no dia do vencimento</span></span></label>${G.agendar?`<div class="g-data"><label for="g-venc"><span class="emo">📆</span> Vence dia</label><input type="number" id="g-venc" inputmode="numeric" min="1" max="31" value="${esc(G.vencDia||'')}" style="width:72px"></div>`:''}`:''}
     ${G.rec&&ehCard?`<div class="g-lbl">O dinheiro dessa conta fica guardado na caixinha?</div><div class="g-parc">${[[1,'Sim, guardo na caixinha'],[0,'Não, só cai no cartão']].map(([k,t])=>`<button type="button" class="g-pchip" data-gguard="${k}" aria-pressed="${G.guardado===!!k}">${t}</button>`).join('')}</div>${G.guardado&&potesList().some(p=>p.tipo==='cartao')?`<label class="g-rec" style="margin-top:6px"><input type="checkbox" id="g-agora" ${G.guardarAgora?'checked':''}> <span class="muted">Já guardei o valor deste mês na caixinha do cartão</span></label>`:''}`:''}
     ${ehCard&&!G.rec?`<div class="g-lbl">Guardou o dinheiro dessa compra na caixinha?</div><div class="g-parc">${[[1,'Sim, guardei na caixinha'],[0,'Não']].map(([k,t])=>`<button type="button" class="g-pchip" data-gguardc="${k}" aria-pressed="${G.guardaCompra===!!k}">${t}</button>`).join('')}</div><div class="g-lbl">Parcelas</div>`:''}
     ${ehCard&&!G.rec?`<div class="g-parc">${[['','À vista'],['2X','2x'],['3X','3x'],['4X','4x'],['5X','5x'],['6X','6x'],['10X','10x'],['12X','12x']].map(([k,t])=>`<button type="button" class="g-pchip" data-gparc="${k}" aria-pressed="${G.parcela===k}">${t}</button>`).join('')}</div>`:''}
@@ -3342,6 +3351,7 @@ function renderGasto(first){
   dEl.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); salvarGasto(); } });
   const dt=document.getElementById('g-data'); dt.addEventListener('change',()=>{ G.data=dt.value||todayISO(); document.getElementById('g-nota').innerHTML=gNota(); atualizarSaldoG(); });
   document.getElementById('g-rec').addEventListener('change',e=>{ lerG(); G.rec=e.target.checked; if(G.rec) G.parcela=''; renderGasto(); });
+  const gag=document.getElementById('g-agend'); if(gag) gag.addEventListener('change',e=>{ lerG(); G.agendar=e.target.checked; renderGasto(); });
   const gcs=document.getElementById('g-casal'); if(gcs) gcs.addEventListener('change',e=>{ G.casal=e.target.checked; });
   const ag=document.getElementById('g-agora'); if(ag) ag.addEventListener('change',()=>{ G.guardarAgora=ag.checked; atualizarSaldoG(); });
   root.querySelector('.sheet').addEventListener('click',e=>{
@@ -3384,6 +3394,12 @@ function salvarGasto(){
     let msg=lancarCompraCartao({desc,valor:val,data,cartao:G.forma.slice(5),parcela:G.parcela,tipo:G.guardaCompra?'guardado':'limite',cat:cat+'|'+item,guardado:G.guardaCompra,projeto:G.projeto||'',casal:!!G.casal});
     if(G.guardaCompra){ const r=guardarNaCaixinhaCartao(val,data,'Guardado para '+desc); const mk=data.slice(0,7), q=JSON.parse(JSON.stringify(S.cartao[mk])), x=q.compras[q.compras.length-1]; if(x){ x.cxPote=r.pote; x.cxMov=r.mov; save('cartao',mk,q); } msg+=' · '+fmt(val)+' entrou na caixinha do cartão'; }
     closeModal(); toast(msg); return; }
+  if(G.agendar && !G.rec){
+    const dia=parseInt(G.vencDia)||0; if(!(dia>=1&&dia<=31)){ toast('Informe o dia que vence (1 a 31)'); document.getElementById('g-venc')?.focus(); return; }
+    const mkA=data.slice(0,7), ult=new Date(+mkA.slice(0,4),+mkA.slice(5,7),0).getDate();
+    const venc=mkA+'-'+String(Math.min(dia,ult)).padStart(2,'0');
+    S.config={...S.config,contasAgendadas:[...(S.config.contasAgendadas||[]),{id:uid('ag'),desc,valor:val,cat,item,venc,forma:G.forma,paga:false}]};
+    save('config','geral',S.config); closeModal(); toast(desc+' de '+fmt(val)+' no calendário · vence dia '+venc.slice(8)); return; }
   const mk=data.slice(0,7); const o=orcPara(mk); o.itens=o.itens||[]; o.avulsos=o.avulsos||[];
   let it=itemPorNome(o,cat,item); if(!it){ it={id:uid('i'),cat,nome:item,previsto:0,real:0}; o.itens.push(it); }
   it.real=r2((+it.real||0)+val);
