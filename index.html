@@ -265,55 +265,56 @@ h2{font-family:var(--display);font-weight:600;font-size:1.08rem;margin:0;letter-
 .cal-list{border-top:1px solid var(--line)}
 .cal-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
 .cal-row:last-child{border-bottom:0}
-.cal-radio{width:26px;height:26px;border-radius:50%;border:2px solid var(--line-2);background:none;flex:none;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;color:#fff;cursor:default}
+.cal-radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--line-2);background:none;flex:none;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;color:#fff;cursor:default}
 .cal-radio.on{background:var(--accent);border-color:var(--accent)}
 button.cal-radio{cursor:pointer}
 
 /* Calendário de contas — painel detalhado */
-.cal-panel{overflow:hidden}
+.cal-panel{overflow:hidden;align-self:start}
+.cal-head svg{width:48px;height:48px}
 .cal-head{align-items:center}
 .cal-month-tag{font-size:.72rem;font-weight:700;color:var(--accent);background:var(--surface-2);padding:7px 10px;border-radius:999px;white-space:nowrap}
-.cal-progress{height:7px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin:4px 0 14px}
+.cal-progress{height:5px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin:2px 0 9px}
 .cal-progress i{display:block;height:100%;border-radius:99px;background:var(--accent);transition:width .2s ease}
-.cal-summary{display:flex;justify-content:space-between;gap:16px;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2);margin-bottom:17px}
+.cal-summary{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);margin-bottom:11px}
 .cal-summary-main,.cal-summary-side{display:flex;flex-direction:column;gap:3px}
-.cal-summary-main>span,.cal-summary-side span{font-size:.75rem;color:var(--muted)}
-.cal-summary-main>b{font-family:var(--display);font-size:1.55rem;line-height:1.2;color:var(--ink)}
-.cal-summary-main>small{font-size:.72rem;color:var(--muted)}
-.cal-summary-side{gap:10px;min-width:110px}
+.cal-summary-main>span,.cal-summary-side span{font-size:.69rem;color:var(--muted)}
+.cal-summary-main>b{font-family:var(--display);font-size:1.35rem;line-height:1.15;color:var(--ink)}
+.cal-summary-main>small{font-size:.66rem;color:var(--muted)}
+.cal-summary-side{gap:7px;min-width:96px}
 .cal-summary-side>div{display:flex;flex-direction:column;gap:2px}
-.cal-summary-side b{font-size:.88rem;font-variant-numeric:tabular-nums}
-.cal-section-label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.83rem;font-weight:700;margin:4px 0 10px}
+.cal-summary-side b{font-size:.81rem;font-variant-numeric:tabular-nums}
+.cal-section-label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.78rem;font-weight:700;margin:2px 0 6px}
 .cal-section-label span{font-size:.68rem;font-weight:400;color:var(--muted);text-align:right}
-.cal-chips{gap:7px;flex-wrap:nowrap;overflow-x:auto;padding:1px 1px 8px;scrollbar-width:thin}
-.cal-chip{min-width:65px;position:relative;padding:8px 6px 7px;gap:4px}
-.cal-chip b{font-size:1.05rem}
-.cal-chip small{font-size:.62rem;white-space:nowrap;opacity:.85}
+.cal-chips{gap:6px;flex-wrap:nowrap;overflow-x:auto;padding:1px 1px 5px;scrollbar-width:thin}
+.cal-chip{min-width:56px;position:relative;padding:6px 5px 5px;gap:3px}
+.cal-chip b{font-size:.94rem}
+.cal-chip small{font-size:.57rem;white-space:nowrap;opacity:.85}
 .cal-chip em{font-size:.56rem;font-style:normal;color:#b3413a;font-weight:700}
 .cal-chip.sel em{color:inherit}
-.cal-day-detail{margin:10px 0 0;padding:13px 14px 10px;border-radius:13px 13px 0 0;background:var(--surface-2)}
+.cal-day-detail{margin:6px 0 0;padding:9px 11px 7px;border-radius:11px 11px 0 0;background:var(--surface-2)}
 .cal-day-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .cal-day-heading>div:first-child>span{font-size:.72rem;color:var(--muted)}
-.cal-day-heading h3{font-size:1rem;margin:2px 0 0}
+.cal-day-heading h3{font-size:.91rem;margin:1px 0 0}
 .cal-day-total{text-align:right;display:flex;flex-direction:column;gap:1px}
-.cal-day-total b{font-size:1.05rem;font-variant-numeric:tabular-nums}
+.cal-day-total b{font-size:.96rem;font-variant-numeric:tabular-nums}
 .cal-day-total small{font-size:.66rem;color:var(--muted)}
-.cal-day-foot{display:flex;justify-content:space-between;gap:8px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line);font-size:.68rem;color:var(--muted)}
+.cal-day-foot{display:flex;justify-content:space-between;gap:8px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);font-size:.63rem;color:var(--muted)}
 .cal-day-detail+.cal-list{border-top:0;padding:0 12px 2px;background:var(--surface-2);border-radius:0 0 13px 13px}
-.cal-row{gap:10px;padding:12px 0}
-.cal-row-title{font-size:.87rem;font-weight:650;line-height:1.3}
-.cal-row-meta{font-size:.7rem;color:var(--muted);margin-top:3px;line-height:1.35}
+.cal-row{gap:8px;padding:8px 0}
+.cal-row-title{font-size:.81rem;font-weight:650;line-height:1.25}
+.cal-row-meta{font-size:.65rem;color:var(--muted);margin-top:2px;line-height:1.3}
 .cal-row-end{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
-.cal-row-end .val{font-size:.88rem!important;white-space:nowrap}
+.cal-row-end .val{font-size:.82rem!important;white-space:nowrap}
 .cal-status{font-size:.6rem;font-weight:700;padding:3px 7px;border-radius:999px;white-space:nowrap;background:var(--surface);color:var(--muted)}
 .cal-status.paid{color:#25845b;background:rgba(37,132,91,.1)}
 .cal-status.pending{color:var(--accent);background:var(--surface)}
 .cal-status.late{color:#b3413a;background:rgba(179,65,58,.1)}
 .cal-status.receive{color:#3979a8;background:rgba(57,121,168,.1)}
 .cal-row.is-paid .cal-row-title{opacity:.65;text-decoration:line-through}
-.cal-no-date{margin-top:15px}
+.cal-no-date{margin-top:10px}
 .cal-no-date .cal-list{padding-top:1px}
-@media(max-width:520px){.cal-summary{gap:9px;padding:11px}.cal-summary-main>b{font-size:1.35rem}.cal-summary-side{min-width:92px}.cal-section-label span{max-width:48%}.cal-chip{min-width:60px}}
+@media(max-width:520px){.cal-summary{gap:8px;padding:9px 10px}.cal-summary-main>b{font-size:1.25rem}.cal-summary-side{min-width:88px}.cal-section-label span{max-width:48%}.cal-chip{min-width:54px}}
 
 .tbl-wrap.fit th{font-size:.64rem;letter-spacing:.03em}
 table{width:100%;border-collapse:collapse;font-size:.88rem}
