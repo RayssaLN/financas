@@ -2729,12 +2729,11 @@ function initCasal(){
   renderNav();
   try{ db.doc('perfil/foto').onSnapshot(d=>{ C.fotos.eu=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}); }catch(e){}
   cp.onCasal(info=>{
-    C.unsubs.forEach(u=>{ try{u()}catch(e){} }); C.unsubs=[]; C.potesDe={}; C.cpotes={}; C.resumo={}; C.resumoPub=null; C.divisao=null; C.fotos={eu:C.fotos.eu};
+    C.unsubs.forEach(u=>{ try{u()}catch(e){} }); C.unsubs=[]; C.potesDe={}; C.cpotes={}; C.resumo={}; C.resumoPub=null; C.fotos={eu:C.fotos.eu};
     C.cid = info ? info.cid : null; C.casal = info; C.parc = info ? (info.membros||[]).find(u=>u!==C.me) || null : null;
     if (info && info.nomes && info.nomes[C.me]) C.meNome = info.nomes[C.me];
     if (C.cid){
       C.unsubs.push(cp.casalDb(C.cid).collection('fundo').onSnapshot(sn=>{ const d=sn.docs.find(x=>x.id==='role'); C.fundo=d?d.data():null; if(UI.perfil==='casal') render(); }, ()=>{}));
-      C.unsubs.push(cp.casalDb(C.cid).collection('divisao').doc('contas').onSnapshot(d=>{ C.divisao=d.exists?(d.data()||{contas:[]}):{contas:[]}; if(UI.perfil==='casal') render(); }, ()=>{}));
       C.unsubs.push(cp.casalDb(C.cid).collection('resumo').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.resumo=o; if(UI.view==='inicio') render(); }, ()=>{}));
       C.unsubs.push(cp.casalDb(C.cid).collection('potes').onSnapshot(sn=>{ const o={}; sn.docs.forEach(d=>o[d.id]=d.data()); C.cpotes=o; if(UI.perfil==='casal') render(); }, ()=>{}));
       C.unsubs.push(cp.casalDb(C.cid).doc('perfil/fotos').onSnapshot(d=>{ C.fotos.casal=d.exists?(d.data()||{}).img||null:null; fotoUpd(); }, ()=>{}));
@@ -2928,36 +2927,7 @@ function compraEditForm(src,id,mk){
       x2.casal=c; x2.desc=nd; x2.cartao=v.cartao||x2.cartao; return save('cartao',mk,c2);
     }});
 }
-function vCasal(){ const base=vCasalBase(); return (C.on&&C.parc)?base+divisaoHtml()+comprasCasalHtml():base; }
-/* divisão das contas da casa: quem paga cada uma, e quanto um deve ao outro (divisão 50/50 do total) */
-function divisaoLista(){ return (C.divisao&&C.divisao.contas)||[]; }
-function saveDivisao(list){
-  C.divisao={...(C.divisao||{}),contas:list}; render();
-  try{ window.__couple.casalDb(C.cid).collection('divisao').doc('contas').set(JSON.parse(JSON.stringify(C.divisao))).catch(()=>toast('Não consegui salvar. Tente de novo.')); }catch(e){ toast('Não consegui salvar. Tente de novo.'); }
-}
-function divisaoHtml(){
-  if(!C.on||!C.parc) return '';
-  const L=divisaoLista(), tot=r2(sum(L,x=>x.valor)), eu=r2(sum(L.filter(x=>x.quem===C.me),x=>x.valor)), ele=r2(tot-eu);
-  const saldo=r2(eu-tot/2), ne=nomeParceiro();
-  const acerto = !L.length ? '' : Math.abs(saldo)<0.005 ? 'Tudo certo, cada um pagou a sua metade.' : saldo>0 ? `<b>${esc(ne)}</b> te devolve <b>${fmt(saldo)}</b>.` : `Você devolve <b>${fmt(-saldo)}</b> para ${esc(ne)}.`;
-  const rows=L.map(x=>`<div class="row" style="align-items:center"><div class="grow" style="min-width:0"><div class="t">${esc(x.nome)}</div><div class="muted" style="font-size:.8rem">${fmt(x.valor)}</div></div>
-      <span class="actions" style="flex-wrap:nowrap">
-        <button class="g-pchip" data-act="div-quem" data-id="${esc(x.id)}" aria-pressed="${x.quem===C.me}">${esc(meuNome())}</button>
-        <button class="g-pchip" data-act="div-quem" data-id="${esc(x.id)}" aria-pressed="${x.quem===C.parc}">${esc(ne)}</button>
-        <button class="btn sm ghost" data-act="div-del" data-id="${esc(x.id)}" aria-label="Apagar">${svg('trash')}</button></span></div>`).join('');
-  return `<div class="card section"><div class="card-h"><div><h2>Quem paga cada conta</h2><p>Marque quem paga. A divisão é 50/50 do total.</p></div><button class="btn sm pri" data-act="div-add">${svg('plus')}Conta</button></div>
-    ${L.length?`<div class="rows">${rows}</div>
-    <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:.9rem;flex-wrap:wrap"><span>${esc(meuNome())} paga <b>${fmt(eu)}</b></span><span>${esc(ne)} paga <b>${fmt(ele)}</b></span></div>
-    <p class="note" style="margin:10px 0 0">${acerto}</p>`:'<p class="muted" style="margin:6px 0 0">Adicione as contas da casa (aluguel, luz, internet…) e marque quem paga cada uma.</p>'}
-  </div>`;
-}
-ACT['div-add']=()=>form({title:'Conta da casa', submit:'Salvar', fields:[
-  {name:'nome',label:'Conta',type:'text',req:true,value:''},
-  {name:'valor',label:'Valor mensal',type:'money',req:true,value:''},
-  {name:'quem',label:'Quem paga',type:'seg',options:[[C.me,meuNome()],[C.parc,nomeParceiro()]],value:C.me}],
-  onSubmit:v=>{ const val=r2(parseNum(v.valor)); if(!val) return 'Informe o valor'; saveDivisao([...divisaoLista(),{id:uid('dv'),nome:(v.nome||'').trim()||'Conta',valor:val,quem:v.quem||C.me}]); toast('Conta adicionada'); }});
-ACT['div-quem']=d=>saveDivisao(divisaoLista().map(x=>x.id===d.id?{...x,quem:x.quem===C.me?C.parc:C.me}:x));
-ACT['div-del']=d=>{ saveDivisao(divisaoLista().filter(x=>x.id!==d.id)); toast('Conta apagada'); };
+function vCasal(){ const base=vCasalBase(); return (C.on&&C.parc)?base+comprasCasalHtml():base; }
 function vCasalBase(){
   let h = head('Casal', C.parc ? `${esc(meuNome())} & ${esc(nomeParceiro())}` : 'Finanças do casal', C.parc?'O dinheiro de vocês dois é o que está nas caixinhas do casal':'Vincule a sua conta com a do seu amor para montar as caixinhas de vocês', C.parc?`<button class="btn pri" data-act="nova-cx-casal">${svg('plus')}Nova caixinha</button>`:'');
   if (!C.on) return h+'<div class="card empty"><p>A parte do casal funciona na versão do app com login (GitHub Pages).</p></div>';
