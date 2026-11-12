@@ -857,10 +857,11 @@ function contasDoMesCal(mk){
   emprList().forEach(e=>{ if(!e.inicio) return; const n=(e.valores||[]).length;
     for(let k=0;k<n;k++){ if(addMonth(e.inicio,k)!==mk) continue;
       const rec=emprTipo(e)==='emprestei';
-      itens.push({dia:e.dia||null, v:e.valores[k], t:(rec?'Receber de ':'Pagar a ')+(e.quem||e.desc)+(n>1?' '+(k+1)+'/'+n:''), paga:k<emprPago(e), cor:rec?'var(--accent)':'#b3413a', rec, sub:rec?'A receber · empréstimo':'Empréstimo'}); } });
-  (S.config.contasAgendadas||[]).forEach(x=>{ if(!x.venc||x.venc.slice(0,7)!==mk) return; itens.push({dia:+x.venc.slice(8,10), v:x.valor, t:x.desc, sub:'Conta a pagar', paga:!!x.pagaEm, cor:'#b3413a', ag:x.id}); });
+      itens.push({dia:e.dia||null, v:e.valores[k], t:(rec?'Receber de ':'Pagar a ')+(e.quem||e.desc)+(n>1?' '+(k+1)+'/'+n:''), paga:k<emprPago(e), cor:rec?'var(--accent)':'#b3413a', rec, emp:e.id, sub:rec?'A receber · empréstimo':'Empréstimo'}); } });
+  (S.config.contasAgendadas||[]).forEach(x=>{ if(!x.venc||x.venc.slice(0,7)!==mk) return; itens.push({dia:+x.venc.slice(8,10), v:x.valor, t:x.desc, sub:'Conta a pagar', paga:!!x.pagaEm, comoPagou:x.pagaForma?formaNome(x.pagaForma):'', cor:'#b3413a', ag:x.id}); });
   return itens;
 }
+function formaNome(f){ if(!f) return ''; if(f.startsWith('card:')){ const c=f.slice(5); return 'cartão '+(c==='MP'?'Mercado Pago':c); } return ({pix:'Pix',debito:'débito',dinheiro:'dinheiro'})[f]||f; }
 function calIcone(){
   // calendário 3D com moeda; as cores vêm da paleta (var(--accent), var(--gold))
   const id='ci'+Math.random().toString(36).slice(2,7);
@@ -910,8 +911,8 @@ function calendarioContasHtml(mk){
   if(sel&&mk===mkHoje){ const n=sel-diaHoje; quando = n>0?`em ${n} ${n===1?'dia':'dias'}`:(n===0?'hoje':`venceu há ${-n} ${n===-1?'dia':'dias'}`); }
   const chips=dias.map(d=>{ const l=itens.filter(x=>x.dia===d), abertos=l.filter(x=>!x.paga).length;
     return `<button class="cal-chip ${d===sel?'sel':''}" data-act="cal-dia" data-dia="${d}"><b>${String(d).padStart(2,'0')}</b><span class="dots">${l.slice(0,5).map(x=>`<i style="background:${d===sel?'currentColor':(x.paga?'var(--muted)':x.cor)}"></i>`).join('')}</span>${abertos?'':'<span class="ok">✓</span>'}</button>`; }).join('');
-  const linha=x=>{ const circ = x.ag&&!x.paga ? `<button class="cal-radio" data-act="agendada-pagar" data-id="${esc(x.ag)}" aria-label="Marcar como paga"></button>` : `<span class="cal-radio ${x.paga?'on':''}" aria-hidden="true">${x.paga?'✓':''}</span>`;
-    return `<div class="cal-row">${circ}<div class="grow" style="min-width:0"><div class="t" style="${x.paga?'text-decoration:line-through;opacity:.6':''}">${esc(x.t)}</div><div class="muted" style="font-size:.8rem">${x.sub||''}${x.paga?' · paga':''}</div></div><div class="val sm" style="font-size:.95rem;white-space:nowrap">${fmt(x.v)}</div></div>`; };
+  const linha=x=>{ const circ = (x.ag||x.emp)&&!x.paga ? `<button class="cal-radio" data-act="cal-pagar" data-kind="${x.ag?'ag':'empr'}" data-id="${esc(x.ag||x.emp)}" data-rec="${x.rec?1:0}" aria-label="Marcar como paga"></button>` : `<span class="cal-radio ${x.paga?'on':''}" aria-hidden="true">${x.paga?'✓':''}</span>`;
+    return `<div class="cal-row">${circ}<div class="grow" style="min-width:0"><div class="t" style="${x.paga?'text-decoration:line-through;opacity:.6':''}">${esc(x.t)}</div><div class="muted" style="font-size:.8rem">${x.sub||''}${x.paga?' · paga'+(x.comoPagou?' com '+esc(x.comoPagou):''):''}</div></div><div class="val sm" style="font-size:.95rem;white-space:nowrap">${fmt(x.v)}</div></div>`; };
   const sem=itens.filter(x=>!x.dia);
   return `<div class="card section">
     <div class="card-h"><div style="display:flex;gap:12px;align-items:center;min-width:0">${calIcone()}<div style="min-width:0"><h2>Contas a pagar${sel?` <span class="muted" style="font-weight:500">· dia ${String(sel).padStart(2,'0')}</span>`:''}</h2><p>${mLabel(mk)} · falta pagar ${fmt(aPagarMes)}${aReceberMes?' · a receber '+fmt(aReceberMes):''}</p></div></div></div>
@@ -2264,6 +2265,31 @@ const ACT = {
   'copiar-mes'(d){
     const from=S.orc[d.from]; const pv=previstasDoMesAnterior(from); const o={mes:UI.month,renda:0,rendaPrevista:r2(sum(Object.values(pv),v=>v)),previstas:pv,recebidos:[],itens:(from.itens||[]).filter(i=>i.cat!=='poupanca'||true).map(i=>({id:uid('i'),cat:i.cat,nome:i.nome,previsto:r2(i.real||i.previsto),real:0})),avulsos:[]};
     save('orcamento',UI.month,o); toast(mLabel(UI.month)+' criado');
+  },
+  'cal-pagar'(d){
+    if(d.kind==='empr'&&d.rec==='1'){ emprPagar(d.id); return; }   // dinheiro que você recebeu: entra direto
+    const cards=S.config.cartoes||[];
+    const btn=(f,t)=>`<button class="btn" data-act="cal-pagar-forma" data-kind="${d.kind}" data-id="${esc(d.id)}" data-forma="${esc(f)}">${t}</button>`;
+    const formas=[['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],...(d.kind==='ag'?cards.map(c=>['card:'+c,'Cartão '+(c==='MP'?'Mercado Pago':c)]):[])];
+    modal(`<h3>Como você pagou?</h3><p class="sub" style="margin:-6px 0 14px">Escolha e a conta é marcada como paga e vai para o lugar certo.</p>
+      <div class="stack" style="gap:10px">${formas.map(([f,t])=>btn(f,t)).join('')}</div>
+      <div class="foot"><button class="btn ghost" data-close>Cancelar</button></div>`); },
+  'cal-pagar-forma'(d){
+    const forma=d.forma, hoje=todayISO();
+    if(d.kind==='ag'){
+      const lst=S.config.contasAgendadas||[], x=lst.find(a=>a.id===d.id); if(!x||x.pagaEm){ closeModal(); return; }
+      if(forma.startsWith('card:')){ lancarCompraCartao({desc:x.desc,valor:x.valor,data:hoje,cartao:forma.slice(5),parcela:'',tipo:'limite',cat:x.cat+'|'+x.item,guardado:false,projeto:'',casal:false}); }
+      else { const ref=lancarNoGasto(x.cat,x.item,x.valor,hoje,x.desc);
+        if(ref&&S.orc[ref.mes]){ const o=JSON.parse(JSON.stringify(S.orc[ref.mes])); const av=(o.avulsos||[]).find(a=>a.id===ref.avulso); if(av){ av.forma=forma; save('orcamento',ref.mes,o); } } }
+      S.config={...S.config,contasAgendadas:lst.map(a=>a.id===x.id?{...a,pagaEm:hoje,pagaForma:forma}:a)}; save('config','geral',S.config);
+      closeModal(); toast(x.desc+' paga · '+fmt(x.valor)+' · '+formaNome(forma)); return; }
+    if(d.kind==='empr'){
+      if(forma.startsWith('card:')){ toast('Empréstimo: escolha Pix, Débito ou Dinheiro'); return; }
+      const e=emprList().find(x=>x.id===d.id); if(!e){ closeModal(); return; }
+      emprPagar(d.id);
+      if(forma!=='pix'){ const mk=hoje.slice(0,7), o=orcOf(mk); const av=o&&(o.avulsos||[]).filter(a=>a.data===hoje&&a.forma==='pix'&&(a.desc||'').startsWith(e.desc)).pop();
+        if(av){ const o2=JSON.parse(JSON.stringify(o)); o2.avulsos.find(a=>a.id===av.id).forma=forma; save('orcamento',mk,o2); } }
+      closeModal(); }
   },
   'agendada-pagar'(d){
     const lst=S.config.contasAgendadas||[], x=lst.find(a=>a.id===d.id); if(!x||x.pagaEm) return;
