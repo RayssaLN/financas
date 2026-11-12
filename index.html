@@ -255,6 +255,19 @@ h2{font-family:var(--display);font-weight:600;font-size:1.08rem;margin:0;letter-
 .cal-d.sel{background:var(--accent);color:var(--accent-ink)}
 .cal-d .dots{display:flex;gap:3px;justify-content:center;min-height:6px}
 .cal-d .dots i{width:6px;height:6px;border-radius:50%;display:block}
+.cal-chips{display:flex;flex-wrap:wrap;gap:8px}
+.cal-chip{min-width:62px;padding:8px 6px 6px;border-radius:14px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font:inherit;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+.cal-chip b{font-size:1rem}
+.cal-chip.sel{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.cal-chip .dots{display:flex;gap:3px;min-height:6px}
+.cal-chip .dots i{width:5px;height:5px;border-radius:50%;display:block}
+.cal-chip .ok{font-size:.7rem;opacity:.8}
+.cal-list{border-top:1px solid var(--line)}
+.cal-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.cal-row:last-child{border-bottom:0}
+.cal-radio{width:26px;height:26px;border-radius:50%;border:2px solid var(--line-2);background:none;flex:none;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;color:#fff;cursor:default}
+.cal-radio.on{background:var(--accent);border-color:var(--accent)}
+button.cal-radio{cursor:pointer}
 .tbl-wrap.fit th{font-size:.64rem;letter-spacing:.03em}
 table{width:100%;border-collapse:collapse;font-size:.88rem}
 th,td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
@@ -840,29 +853,40 @@ function contasDoMesCal(mk){
   const itens=[];
   const cards=[...new Set([...(S.config.cartoes||[]),...cartoesFatura()])];
   cards.forEach(c=>{ const comp=composicaoFatura(c,mk); if(!comp||!comp.tot) return; const cf=cartaoDatas(c);
-    itens.push({dia:cf&&cf.vence?cf.vence:null, v:comp.tot, t:'Fatura '+(c==='MP'?'Mercado Pago':c), paga:!!((S.cinfo.pagas||{})[mk]||{})[c], cor:'var(--gold)'}); });
+    itens.push({dia:cf&&cf.vence?cf.vence:null, v:comp.tot, t:'Fatura '+(c==='MP'?'Mercado Pago':c), sub:'Cartão de crédito', paga:!!((S.cinfo.pagas||{})[mk]||{})[c], cor:'var(--gold)'}); });
   emprList().forEach(e=>{ if(!e.inicio) return; const n=(e.valores||[]).length;
     for(let k=0;k<n;k++){ if(addMonth(e.inicio,k)!==mk) continue;
       const rec=emprTipo(e)==='emprestei';
-      itens.push({dia:e.dia||null, v:e.valores[k], t:(rec?'Receber de ':'Pagar a ')+(e.quem||e.desc)+(n>1?' '+(k+1)+'/'+n:''), paga:k<emprPago(e), cor:rec?'var(--accent)':'#b3413a', rec}); } });
-  (S.config.contasAgendadas||[]).forEach(x=>{ if(!x.venc||x.venc.slice(0,7)!==mk) return; itens.push({dia:+x.venc.slice(8,10), v:x.valor, t:'Conta '+x.desc, paga:!!x.pagaEm, cor:'#b3413a', ag:x.id}); });
+      itens.push({dia:e.dia||null, v:e.valores[k], t:(rec?'Receber de ':'Pagar a ')+(e.quem||e.desc)+(n>1?' '+(k+1)+'/'+n:''), paga:k<emprPago(e), cor:rec?'var(--accent)':'#b3413a', rec, sub:rec?'A receber · empréstimo':'Empréstimo'}); } });
+  (S.config.contasAgendadas||[]).forEach(x=>{ if(!x.venc||x.venc.slice(0,7)!==mk) return; itens.push({dia:+x.venc.slice(8,10), v:x.valor, t:x.desc, sub:'Conta a pagar', paga:!!x.pagaEm, cor:'#b3413a', ag:x.id}); });
   return itens;
 }
 function calendarioContasHtml(mk){
-  const itens=contasDoMesCal(mk), ano=+mk.slice(0,4), mes=+mk.slice(5,7);
-  const dias=new Date(ano,mes,0).getDate(), ini=new Date(ano,mes-1,1).getDay();
-  const hoje=todayISO(), selDia=(UI.calDia&&UI.calDia.mk===mk)?UI.calDia.dia:null;
-  const porDia={}; itens.forEach(x=>{ if(x.dia) (porDia[x.dia]=porDia[x.dia]||[]).push(x); });
-  const cel=[]; for(let i=0;i<ini;i++) cel.push('<span></span>');
-  for(let d=1;d<=dias;d++){ const l=porDia[d]||[], iso=mk+'-'+String(d).padStart(2,'0'), tem=l.length>0;
-    cel.push(`<button class="cal-d ${tem?'has':''} ${iso===hoje?'hoje':''} ${selDia===d?'sel':''}" ${tem?`data-act="cal-dia" data-dia="${d}"`:'tabindex="-1"'}><span style="font-size:.85rem;font-weight:${tem?700:500}">${d}</span><span class="dots">${l.slice(0,3).map(x=>`<i style="background:${x.paga?'var(--muted)':x.cor}"></i>`).join('')}</span></button>`); }
-  const sem=itens.filter(x=>!x.dia), lista=(selDia?itens.filter(x=>x.dia===selDia):itens.filter(x=>x.dia)).sort((a,b)=>(a.dia||99)-(b.dia||99));
-  const aPagar=sum(itens.filter(x=>!x.paga&&!x.rec),x=>x.v), aReceber=sum(itens.filter(x=>!x.paga&&x.rec),x=>x.v);
-  const linha=x=>`<div class="row"><div class="grow"><div class="t" style="${x.paga?'text-decoration:line-through;opacity:.6':''}"><i class="dot" style="background:${x.cor}"></i> ${esc(x.t)}</div><div class="muted" style="font-size:.8rem">${x.dia?'Dia '+x.dia:'Sem dia de vencimento'} · ${x.paga?'paga':'falta pagar'}</div></div><div class="val sm" style="font-size:.95rem">${fmt(x.v)}</div>${x.ag&&!x.paga?`<button class="btn sm pri" style="margin-left:8px" data-act="agendada-pagar" data-id="${esc(x.ag)}">Paguei</button>`:''}</div>`;
-  return `<div class="card section"><div class="card-h"><div><h2>Calendário de contas</h2><p>${mLabel(mk)} · falta pagar ${fmt(aPagar)}${aReceber?' · a receber '+fmt(aReceber):''}${selDia?' · dia '+selDia+' selecionado (toque de novo para ver o mês)':''}</p></div></div>
-    <div class="cal-grid">${['D','S','T','Q','Q','S','S'].map(w=>`<span class="wd">${w}</span>`).join('')}${cel.join('')}</div>
-    ${lista.length?`<div class="rows" style="margin-top:12px">${lista.map(linha).join('')}</div>`:'<p class="muted" style="margin:12px 0 0">Nenhuma conta com dia de vencimento neste mês.</p>'}
-    ${sem.length&&!selDia?`<div class="rows" style="margin-top:10px">${sem.map(linha).join('')}</div><p class="muted" style="font-size:.78rem;margin:6px 0 0">Sem dia cadastrado: informe o dia que vence em Cartão → Datas, ou no empréstimo.</p>`:''}
+  const itens=contasDoMesCal(mk), hoje=todayISO(), mkHoje=thisMonth();
+  const diaHoje=+hoje.slice(8,10);
+  const dias=[...new Set(itens.filter(x=>x.dia).map(x=>x.dia))].sort((a,b)=>a-b);
+  let sel=(UI.calDia&&UI.calDia.mk===mk)?UI.calDia.dia:null;
+  if(!sel||!dias.includes(sel)){
+    sel = (mk===mkHoje ? (dias.find(d=>d>=diaHoje)||dias[0]) : dias[0]) || null;
+  }
+  const doDia=sel?itens.filter(x=>x.dia===sel):[];
+  const pagos=doDia.filter(x=>x.paga).length;
+  const totDia=sum(doDia,x=>x.v);
+  const naoPagos=itens.filter(x=>!x.paga&&!x.rec);
+  const aPagarMes=sum(naoPagos,x=>x.v), aReceberMes=sum(itens.filter(x=>!x.paga&&x.rec),x=>x.v);
+  let quando='';
+  if(sel&&mk===mkHoje){ const n=sel-diaHoje; quando = n>0?`em ${n} ${n===1?'dia':'dias'}`:(n===0?'hoje':`venceu há ${-n} ${n===-1?'dia':'dias'}`); }
+  const chips=dias.map(d=>{ const l=itens.filter(x=>x.dia===d), abertos=l.filter(x=>!x.paga).length;
+    return `<button class="cal-chip ${d===sel?'sel':''}" data-act="cal-dia" data-dia="${d}"><b>${String(d).padStart(2,'0')}</b><span class="dots">${l.slice(0,5).map(x=>`<i style="background:${d===sel?'currentColor':(x.paga?'var(--muted)':x.cor)}"></i>`).join('')}</span>${abertos?'':'<span class="ok">✓</span>'}</button>`; }).join('');
+  const linha=x=>{ const circ = x.ag&&!x.paga ? `<button class="cal-radio" data-act="agendada-pagar" data-id="${esc(x.ag)}" aria-label="Marcar como paga"></button>` : `<span class="cal-radio ${x.paga?'on':''}" aria-hidden="true">${x.paga?'✓':''}</span>`;
+    return `<div class="cal-row">${circ}<div class="grow" style="min-width:0"><div class="t" style="${x.paga?'text-decoration:line-through;opacity:.6':''}">${esc(x.t)}</div><div class="muted" style="font-size:.8rem">${x.sub||''}${x.paga?' · paga':''}</div></div><div class="val sm" style="font-size:.95rem;white-space:nowrap">${fmt(x.v)}</div></div>`; };
+  const sem=itens.filter(x=>!x.dia);
+  return `<div class="card section">
+    <div class="card-h"><div><h2>Contas a pagar${sel?` <span class="muted" style="font-weight:500">· dia ${String(sel).padStart(2,'0')}</span>`:''}</h2><p>${mLabel(mk)} · falta pagar ${fmt(aPagarMes)}${aReceberMes?' · a receber '+fmt(aReceberMes):''}</p></div></div>
+    ${dias.length?`<div class="cal-chips">${chips}</div>`:''}
+    ${sel?`<div style="margin:14px 0 4px"><div class="val" style="font-family:var(--display);font-weight:700;font-size:1.7rem">${fmt(totDia)}</div><div class="muted" style="font-size:.84rem">${quando?quando+' · ':''}${pagos} de ${doDia.length} ${doDia.length===1?'paga':'pagas'}</div></div>`:''}
+    ${doDia.length?`<div class="cal-list">${doDia.map(linha).join('')}</div>`:(dias.length?'':'<p class="muted" style="margin:12px 0 0">Nenhuma conta com dia de vencimento neste mês.</p>')}
+    ${sem.length?`<div class="cal-list" style="margin-top:10px"><p class="muted" style="font-size:.8rem;margin:0 0 4px">Sem dia de vencimento</p>${sem.map(linha).join('')}</div>`:''}
   </div>`;
 }
 function vInicio(){
