@@ -560,7 +560,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
     </div>
     <div id="perfil-switch" class="pswitch" hidden></div>
     <nav id="sidenav" class="stack" style="gap:18px"></nav>
-    <div class="foot stack" style="gap:10px"><button class="navbtn" data-act="cores" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a3 3 0 0 1 0-6h1.5"/></svg>Cores do app</button><button class="navbtn" data-act="menu" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M4 12h16M4 18h7"/><circle cx="17" cy="6" r="2"/><circle cx="14" cy="18" r="2"/></svg>Personalizar menu</button><button class="navbtn" data-act="importar-extrato" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>Importar extrato</button><button class="navbtn" data-act="sugestoes" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/></svg>Sugestões</button><button class="navbtn" data-act="backup" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Backup dos dados</button><button class="navbtn" data-act="sair" id="btn-sair" style="padding:6px 0" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sair</button><span class="sync" id="sync"><i></i><span>Conectando…</span></span></div>
+    <div class="foot stack" style="gap:10px"><button class="navbtn" data-act="ajustes" style="padding:6px 0"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Ajustes</button></div>
   </aside>
 
   <main id="main"><div class="loading">Carregando suas finanças…</div></main>
@@ -878,7 +878,7 @@ function renderNav(){
   document.getElementById('sidenav').innerHTML = groups.map(g=>`<div class="navgroup">${g?`<h6>${g}</h6>`:''}${VIEWS.filter(v=>v.g===g).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.n}</button>`).join('')}</div>`).join('');
   const inMore = !BNAV.includes(UI.view);
   document.getElementById('bnav').innerHTML = BNAV.map(id=>{const v=VIEWS.find(x=>x.id===id); return `<button data-go="${id}" ${UI.view===id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`;}).join('') + `<button data-more ${inMore?'aria-current="page"':''}>${svg('more')}Mais</button>`;
-  document.getElementById('morepanel').innerHTML = (C.on?`<div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:2px">Ver finanças de</div><div class="pswitch-m" style="grid-column:1/-1;margin:0 0 6px">${pbtns()}</div><div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600">${UI.perfil==='casal'?'Configurações':'Telas'}</div>`:'') + VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="cores">${svg('carteira')}Cores do app</button><button class="navbtn" data-act="menu">${svg('gastos')}Personalizar menu</button><button class="navbtn" data-act="importar-extrato">${svg('gastos')}Importar extrato</button><button class="navbtn" data-act="sugestoes">${svg('estrela')}Sugestões</button><button class="navbtn" data-act="backup">${svg('cx')}Backup dos dados</button>` + (window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair</button>`:'');
+  document.getElementById('morepanel').innerHTML = (C.on?`<div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:2px">Ver finanças de</div><div class="pswitch-m" style="grid-column:1/-1;margin:0 0 6px">${pbtns()}</div><div style="grid-column:1/-1;font-size:.66rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600">${UI.perfil==='casal'?'Configurações':'Telas'}</div>`:'') + VIEWS.filter(v=>!BNAV.includes(v.id)).map(v=>`<button class="navbtn" data-go="${v.id}" ${UI.view===v.id?'aria-current="page"':''}>${svg(v.i)}${v.short||v.n}</button>`).join('') + `<button class="navbtn" data-act="ajustes">${svg('cx')}Ajustes</button>`;
 }
 function go(id){ UI.view=id; try{localStorage.setItem('fin.view',id)}catch(e){} document.getElementById('more').classList.remove('open'); renderNav(); render(); window.scrollTo(0,0); }
 
@@ -2370,6 +2370,17 @@ const ACT = {
     const from=S.orc[d.from]; const pv=previstasDoMesAnterior(from); const o={mes:UI.month,renda:0,rendaPrevista:r2(sum(Object.values(pv),v=>v)),previstas:pv,recebidos:[],itens:(from.itens||[]).filter(i=>i.cat!=='poupanca'||true).map(i=>({id:uid('i'),cat:i.cat,nome:i.nome,previsto:r2(i.real||i.previsto),real:0})),avulsos:[]};
     save('orcamento',UI.month,o); toast(mLabel(UI.month)+' criado');
   },
+  'ajustes'(){
+    const sair=window.__logout?`<button class="navbtn" data-act="sair">${svg('left')}Sair da conta</button>`:'';
+    const linha=(act,ic,t,ds)=>`<button class="navbtn" data-act="${act}" style="justify-content:flex-start">${svg(ic)}<span style="text-align:left"><b style="display:block">${t}</b><span class="muted" style="font-size:.78rem">${ds}</span></span></button>`;
+    modal(`<h3>Ajustes</h3>
+      <p class="sub" style="margin:-6px 0 12px">Tudo que configura o app fica aqui.</p>
+      <div class="sec-label" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin:8px 0 6px">Aparência</div>
+      <div class="stack" style="gap:8px">${linha('cores','carteira','Cores do app','Escolha a cor das telas')}${linha('menu','gastos','Personalizar menu','Nomes, ordem e telas escondidas')}</div>
+      <div class="sec-label" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin:14px 0 6px">Dados</div>
+      <div class="stack" style="gap:8px">${linha('importar-extrato','gastos','Importar extrato','Traga lançamentos de um extrato ou fatura')}${linha('backup','cx','Backup dos dados','Salve uma cópia de tudo')}${linha('sugestoes','estrela','Sugestões','Mande ideias para melhorar o app')}</div>
+      ${sair?`<div class="sec-label" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin:14px 0 6px">Conta</div><div class="stack" style="gap:8px">${sair}</div>`:''}
+      <div class="foot"><button class="btn ghost" data-close>Fechar</button></div>`); },
   'cal-pagar'(d){
     if(d.kind==='empr'&&d.rec==='1'){ emprPagar(d.id); return; }   // dinheiro que você recebeu: entra direto
     const cards=S.config.cartoes||[];
@@ -3688,7 +3699,7 @@ document.addEventListener('click', e=>{
   if(t.closest('[data-close]') || t.matches('[data-scrim]')){ closeModal(); return; }
   const mn = t.closest('[data-mnav]'); if(mn){ UI.month=addMonth(UI.month,+mn.dataset.mnav); render(); return; }
   const act = t.closest('[data-act]');
-  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes','sugestoes','cal-dia'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
+  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes','sugestoes','cal-dia','ajustes'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
   if(act){
     e.preventDefault();
     if(act.dataset.act==='apagar-pote'){ const id=act.dataset.pote; closeModal(); remove('potes',id); toast('Apagado'); return; }
