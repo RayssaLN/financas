@@ -1008,11 +1008,11 @@ function calendarioContasHtml(mk){
     const circ=(x.ag||x.emp)&&!x.paga?`<button class="cal-radio" data-act="cal-pagar" data-kind="${x.ag?'ag':'empr'}" data-id="${esc(x.ag||x.emp)}" data-rec="${x.rec?1:0}" aria-label="Marcar como paga"></button>`:`<span class="cal-radio ${x.paga?'on':''}" aria-hidden="true">${x.paga?'✓':''}</span>`;
     const atrasada=!x.paga&&!x.rec&&x.dia&&(mk<mkHoje||(mk===mkHoje&&x.dia<diaHoje));
     const status=x.rec?(x.paga?'Recebido':'A receber'):(x.paga?'Pago':atrasada?'Em atraso':'Pendente');
-    return `<div class="cal-row ${x.paga?'is-paid':''}">${circ}<div class="grow" style="min-width:0"><div class="cal-row-title">${esc(x.t)}</div><div class="cal-row-meta">${x.sub||''}${x.paga?' · paga'+(x.comoPagou?' com '+esc(x.comoPagou):''):''}</div></div><div class="cal-row-end"><b class="val sm">${fmt(x.v)}</b><span class="cal-status ${x.paga?'paid':x.rec?'receive':atrasada?'late':'pending'}">${status}</span></div></div>`;
+    return `<div class="cal-row ${x.paga?'is-paid':''}">${circ}<div class="grow" style="min-width:0"><div class="cal-row-title">${esc(x.t)}</div><div class="cal-row-meta">${x.sub||''}${x.paga?' · paga'+(x.comoPagou?' com '+esc(x.comoPagou):''):''}</div></div><div class="cal-row-end"><b class="val sm">${fmt(x.v)}</b><span class="cal-status ${x.paga?'paid':x.rec?'receive':atrasada?'late':'pending'}">${status}</span>${x.ag?`<button class="btn sm ghost" style="padding:4px 6px" data-act="cal-editar" data-id="${esc(x.ag)}" aria-label="Editar conta">${svg('pencil')}</button>`:''}</div></div>`;
   };
   const sem=itens.filter(x=>!x.dia);
   return `<div class="card section cal-panel">
-    <div class="card-h cal-head"><div style="display:flex;gap:12px;align-items:center;min-width:0">${calIcone()}<div style="min-width:0"><h2>Calendário de contas</h2><p>${mLabel(mk)} · ${itens.length} lançamentos${atrasadas?' · '+atrasadas+' em atraso':''}</p></div></div><span class="cal-month-tag">${percentual}% pago</span></div>
+    <div class="card-h cal-head"><div style="display:flex;gap:12px;align-items:center;min-width:0">${calIcone()}<div style="min-width:0"><h2>Calendário de contas</h2><p>${mLabel(mk)} · ${itens.length} lançamentos${atrasadas?' · '+atrasadas+' em atraso':''}</p></div></div><span style="display:flex;gap:6px;align-items:center"><span class="cal-month-tag">${percentual}% pago</span><button class="btn sm pri" data-act="cal-nova" aria-label="Nova conta">${svg('plus')}Conta</button></span></div>
     <div class="cal-progress"><i style="width:${percentual}%"></i></div>
     <div class="cal-summary">
       <div class="cal-summary-main"><span>Falta pagar</span><b>${fmt(aPagarMes)}</b><small>${naoPagos.length} ${naoPagos.length===1?'conta pendente':'contas pendentes'}</small></div>
@@ -2381,6 +2381,38 @@ const ACT = {
       <div class="stack" style="gap:8px">${linha('importar-extrato','gastos','Importar extrato','Traga lançamentos de um extrato ou fatura')}${linha('backup','cx','Backup dos dados','Salve uma cópia de tudo')}${linha('sugestoes','estrela','Sugestões','Mande ideias para melhorar o app')}</div>
       ${sair?`<div class="sec-label" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin:14px 0 6px">Conta</div><div class="stack" style="gap:8px">${sair}</div>`:''}
       <div class="foot"><button class="btn ghost" data-close>Fechar</button></div>`); },
+  'cal-nova'(){
+    const mk=UI.month, ult=new Date(+mk.slice(0,4),+mk.slice(5,7),0).getDate();
+    form({title:'Nova conta', submit:'Salvar', fields:[
+      {name:'desc',label:'Conta',type:'text',req:true,value:''},
+      {name:'valor',label:'Valor',type:'money',req:true,value:''},
+      {name:'dia',label:'Vence dia (1 a 31)',type:'text',req:true,value:''}],
+      onSubmit:v=>{ const val=r2(parseNum(v.valor)); const dia=parseInt(v.dia)||0; if(!val) return 'Informe o valor'; if(!(dia>=1&&dia<=31)) return 'Informe o dia que vence';
+        const desc=(v.desc||'').trim()||'Conta'; const venc=mk+'-'+String(Math.min(dia,ult)).padStart(2,'0');
+        S.config={...S.config,contasAgendadas:[...(S.config.contasAgendadas||[]),{id:uid('ag'),desc,valor:val,cat:'fixos',item:desc,venc,forma:'pix',paga:false}]}; save('config','geral',S.config); toast(desc+' adicionada ao calendário'); }});
+  },
+  'cal-editar'(d){
+    const x=(S.config.contasAgendadas||[]).find(a=>a.id===d.id); if(!x) return;
+    const mk=x.venc.slice(0,7), ult=new Date(+mk.slice(0,4),+mk.slice(5,7),0).getDate();
+    form({title:'Editar conta', submit:'Salvar', fields:[
+      {name:'desc',label:'Conta',type:'text',req:true,value:x.desc},
+      {name:'valor',label:'Valor',type:'money',req:true,value:x.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})},
+      {name:'dia',label:'Vence dia (1 a 31)',type:'text',req:true,value:String(+x.venc.slice(8,10))}],
+      extra:`<div class="confirm"><span style="flex:1">${x.pagaEm?'Ela já está paga: apagar também tira o gasto de Gastos do mês ou a compra do cartão.':'Apagar esta conta do calendário?'}</span><button type="button" class="btn sm danger" data-act="cal-apagar" data-id="${esc(x.id)}">Apagar</button></div>`,
+      onSubmit:v=>{ const val=r2(parseNum(v.valor)); const dia=parseInt(v.dia)||0; if(!val) return 'Informe o valor'; if(!(dia>=1&&dia<=31)) return 'Informe o dia que vence';
+        const desc=(v.desc||'').trim()||x.desc, venc=mk+'-'+String(Math.min(dia,ult)).padStart(2,'0');
+        let link=x.link;
+        if(link&&link.tipo==='avulso'&&S.orc[link.mes]){ const o=JSON.parse(JSON.stringify(S.orc[link.mes])); const av=(o.avulsos||[]).find(a=>a.id===link.id);
+          if(av){ const diff=r2(val-(+av.valor||0)); av.valor=val; av.desc=desc; const it=(o.itens||[]).find(i=>i.id===av.itemId); if(it) it.real=r2((+it.real||0)+diff); save('orcamento',link.mes,o); link={...link,valor:val}; } }
+        if(link&&link.tipo==='compra'&&S.cartao[link.mk]){ const q=JSON.parse(JSON.stringify(S.cartao[link.mk])); const cc=(q.compras||[]).find(c=>c.id===link.id); if(cc){ cc.valor=val; cc.desc=desc; save('cartao',link.mk,q); } }
+        S.config={...S.config,contasAgendadas:(S.config.contasAgendadas||[]).map(a=>a.id===x.id?{...a,desc,valor:val,venc,link}:a)}; save('config','geral',S.config); toast('Conta atualizada'); }});
+  },
+  'cal-apagar'(d){
+    const lst=S.config.contasAgendadas||[], x=lst.find(a=>a.id===d.id); if(!x) return;
+    if(x.link&&x.link.tipo==='avulso') tirarDoGasto({mes:x.link.mes,item:x.link.item,valor:x.link.valor,avulso:x.link.id});
+    if(x.link&&x.link.tipo==='compra'&&S.cartao[x.link.mk]){ const q=JSON.parse(JSON.stringify(S.cartao[x.link.mk])); q.compras=(q.compras||[]).filter(c=>c.id!==x.link.id); save('cartao',x.link.mk,q); }
+    S.config={...S.config,contasAgendadas:lst.filter(a=>a.id!==x.id)}; save('config','geral',S.config);
+    closeModal(); toast(x.desc+' apagada'); },
   'cal-pagar'(d){
     if(d.kind==='empr'&&d.rec==='1'){ emprPagar(d.id); return; }   // dinheiro que você recebeu: entra direto
     const cards=S.config.cartoes||[];
@@ -2393,10 +2425,11 @@ const ACT = {
     const forma=d.forma, hoje=todayISO();
     if(d.kind==='ag'){
       const lst=S.config.contasAgendadas||[], x=lst.find(a=>a.id===d.id); if(!x||x.pagaEm){ closeModal(); return; }
-      if(forma.startsWith('card:')){ lancarCompraCartao({desc:x.desc,valor:x.valor,data:hoje,cartao:forma.slice(5),parcela:'',tipo:'limite',cat:x.cat+'|'+x.item,guardado:false,projeto:'',casal:false}); }
+      let link=null;
+      if(forma.startsWith('card:')){ lancarCompraCartao({desc:x.desc,valor:x.valor,data:hoje,cartao:forma.slice(5),parcela:'',tipo:'limite',cat:x.cat+'|'+x.item,guardado:false,projeto:'',casal:false}); const cc=(S.cartao[hoje.slice(0,7)]?.compras)||[]; link={tipo:'compra',mk:hoje.slice(0,7),id:cc[cc.length-1].id}; }
       else { const ref=lancarNoGasto(x.cat,x.item,x.valor,hoje,x.desc,x.id);
-        if(ref&&S.orc[ref.mes]){ const o=JSON.parse(JSON.stringify(S.orc[ref.mes])); const av=(o.avulsos||[]).find(a=>a.id===ref.avulso); if(av){ av.forma=forma; save('orcamento',ref.mes,o); } } }
-      S.config={...S.config,contasAgendadas:lst.map(a=>a.id===x.id?{...a,pagaEm:hoje,pagaForma:forma}:a)}; save('config','geral',S.config);
+        if(ref&&S.orc[ref.mes]){ const o=JSON.parse(JSON.stringify(S.orc[ref.mes])); const av=(o.avulsos||[]).find(a=>a.id===ref.avulso); if(av){ av.forma=forma; save('orcamento',ref.mes,o); } link={tipo:'avulso',mes:ref.mes,id:ref.avulso,item:ref.item,valor:x.valor}; } }
+      S.config={...S.config,contasAgendadas:lst.map(a=>a.id===x.id?{...a,pagaEm:hoje,pagaForma:forma,link}:a)}; save('config','geral',S.config);
       closeModal(); toast(x.desc+' paga · '+fmt(x.valor)+' · '+formaNome(forma)); return; }
     if(d.kind==='empr'){
       if(forma.startsWith('card:')){ toast('Empréstimo: escolha Pix, Débito ou Dinheiro'); return; }
