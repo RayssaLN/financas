@@ -770,9 +770,14 @@ function parcCxAporte(p){
   return ref;
 }
 function toggleParcelaGuardada(pid){
+  const p=(S.cinfo.parcelas||[]).find(x=>x.id===pid); if(!p) return;
+  setParcelaGuardada(pid, p.tipo!=='guardado');
+}
+function setParcelaGuardada(pid,quer){
   if(readonlyView()) return save();
   const p=(S.cinfo.parcelas||[]).find(x=>x.id===pid); if(!p) return;
-  const novo=p.tipo==='guardado'?'limite':'guardado';
+  const novo=quer?'guardado':'limite';
+  if(p.tipo===novo) return;
   parcCxUndo(p);
   const q={...p,tipo:novo}; delete q.cxRef; const cxr=parcCxAporte(q); if(Object.keys(cxr).length) q.cxRef=cxr;
   S.cinfo={...S.cinfo,parcelas:S.cinfo.parcelas.map(x=>x.id===pid?q:x)}; save('cartaoinfo','geral',S.cinfo);
@@ -1138,7 +1143,7 @@ function vGastos(){
   const gfl=[['Todos','Todos'],['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito'],['casal','Do casal'],...gvales.map(v=>['vale:'+v,v])];
   h += `<div class="card section"><div class="card-h"><div><h2>Compras do mês</h2><p>Pix, débito, dinheiro, cartão e refeição · total ${fmt(sum(todos,x=>x.valor))}</p></div><button class="btn sm" data-act="importar-extrato">Importar extrato</button></div>
     <div class="chips" style="margin:10px 0">${gfl.map(([k,n])=>`<button class="chip" data-gfiltro="${esc(k)}" aria-pressed="${gf===k}">${esc(n)}</button>`).join('')}</div>
-    ${todos.length?`<div class="rows">${todos.map(a=>{ const it=a.src==='avulso'&&a.itemId&&(o.itens||[]).find(i=>i.id===a.itemId); const ro=a.src==='vale'; return `<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div><div class="s">${esc(a.label)}${it?` · <i class="dot" style="background:${CAT[it.cat].c};width:7px;height:7px"></i> ${esc(CAT[it.cat].n)} › ${esc(it.nome)}`:''}${a.parcela?' · '+esc(a.parcela):''}${a.casal?' · 👫 do casal':''}</div></div><span class="v">${fmt(a.valor)}</span>${gBtnCompra(a,mk)}${ro?'':`<button class="iconbtn" aria-label="Editar" data-edit-compra="${a.src}" data-id="${a.id}" data-mk="${mk}">${svg('pencil')}</button>`}${ro?'<span class="muted" style="font-size:.78rem">edite no Rolê</span>':`<button class="iconbtn" aria-label="Apagar" data-del-${a.src==='avulso'?'avulso':'compra'}="${a.id}">${svg('trash')}</button>`}</div>`; }).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
+    ${todos.length?`<div class="rows">${todos.map(a=>{ const it=a.src==='avulso'&&a.itemId&&(o.itens||[]).find(i=>i.id===a.itemId); const ro=a.src==='vale'; return `<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div><div class="s">${esc(a.label)}${it?` · <i class="dot" style="background:${CAT[it.cat].c};width:7px;height:7px"></i> ${esc(CAT[it.cat].n)} › ${esc(it.nome)}`:''}${a.parcela?' · '+esc(a.parcela):''}${a.casal?' · 👫 do casal':''}</div></div><span class="v">${fmt(a.valor)}</span>${ro?'':`<button class="iconbtn" aria-label="Editar" data-edit-compra="${a.src}" data-id="${a.id}" data-mk="${mk}">${svg('pencil')}</button>`}${ro?'<span class="muted" style="font-size:.78rem">edite no Rolê</span>':`<button class="iconbtn" aria-label="Apagar" data-del-${a.src==='avulso'?'avulso':'compra'}="${a.id}">${svg('trash')}</button>`}</div>`; }).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
   </div>`;
   // histórico
   const ks = Object.keys(S.orc).sort().slice(-8);
@@ -3079,7 +3084,8 @@ function compraEditForm(src,id,mk){
       {name:'desc',label:'Descrição',value:a.desc||''},
       {name:'forma',label:'Como pagou',type:'seg',options:[['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito']],value:formaAtual},
       {name:'cartao',label:'Qual cartão (se for cartão)',type:'select',options:cards.map(c=>[c,c==='MP'?'Mercado Pago':c]),value:src==='cartao'?a.cartao:cards[0]},
-      {name:'casal',label:'Compra do casal?',type:'seg',options:[['nao','Não'],['sim','Sim']],value:a.casal?'sim':'nao'}
+      {name:'casal',label:'Compra do casal?',type:'seg',options:[['nao','Não'],['sim','Sim']],value:a.casal?'sim':'nao'},
+      ...(src==='cartao'?[{name:'guardado',label:'O dinheiro dessa compra já está guardado na caixinha?',type:'seg',options:[['sim','Sim, guardado'],['nao','Não']],value:(()=>{const pr=parcDaCompra(a.id); return (pr?pr.tipo==='guardado':!!a.guardado)?'sim':'nao';})()}]:[])
     ],
     extra: src==='avulso' ? `<div class="actions"><button class="btn sm ghost" data-cat-avulso="${esc(id)}">Mudar categoria</button></div>` : '',
     onSubmit:v=>{
@@ -3103,6 +3109,10 @@ function compraEditForm(src,id,mk){
         return;
       }
       if(src==='avulso'){ const o2=JSON.parse(JSON.stringify(ensureOrc(mk))); const av=(o2.avulsos||[]).find(x=>x.id===id); if(!av) return; av.casal=c; av.desc=nd; av.forma=nf; return save('orcamento',mk,o2); }
+      if(src==='cartao' && v.guardado){
+        const pr=parcDaCompra(id), atual=pr?pr.tipo==='guardado':!!a.guardado, quer=v.guardado==='sim';
+        if(quer!==atual){ if(pr) setParcelaGuardada(pr.id,quer); else toggleGuardarCompra(id,mk,false); }
+      }
       const c2=JSON.parse(JSON.stringify(S.cartao[mk]||{compras:[]})); const x2=(c2.compras||[]).find(q=>q.id===id); if(!x2) return;
       x2.casal=c; x2.desc=nd; x2.cartao=v.cartao||x2.cartao; return save('cartao',mk,c2);
     }});
