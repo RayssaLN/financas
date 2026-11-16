@@ -757,6 +757,34 @@ function pickMonth(){
 function orcOf(mk){ return S.orc[mk] || null; }
 function compraGuardadaPorId(id){ for(const m of Object.values(S.cartao)){ const x=(m.compras||[]).find(c=>c.id===id); if(x) return !!x.guardado; } return false; }
 function parcGuardadaNoMes(pid,F){ return !!((S.cinfo.guardados||{})[F]||{})['pc_'+pid]; }
+/* parcela marcada como "dinheiro já guardado": vai para a caixinha do cartão (uma entrada por parcela ainda não paga)
+   e, em Gastos do mês, desconta do saldo na categoria Gastos gerais no mês de cada parcela */
+function parcDaCompra(id){ return (S.cinfo.parcelas||[]).find(p=>p.compraId===id)||null; }
+function parcGuardadoDaCompra(id){ const p=parcDaCompra(id); return !!(p&&p.tipo==='guardado'); }
+function parcCxUndo(p){
+  Object.values((p&&p.cxRef)||{}).forEach(r=>{ if(r&&r.pote&&S.potes[r.pote]){ const q=JSON.parse(JSON.stringify(S.potes[r.pote])); q.movimentos=(q.movimentos||[]).filter(m=>m.id!==r.mov); save('potes',r.pote,q); } });
+}
+function parcCxAporte(p){
+  const ref={}; if(!p||p.tipo!=='guardado') return ref; const n=p.valores.length;
+  p.valores.forEach((v,i)=>{ if(i<(p.pagas||0)) return; const r=guardarNaCaixinhaCartao(r2(+v||0),todayISO(),'Guardado para '+p.desc+' '+(i+1)+'/'+n); ref[i]={pote:r.pote,mov:r.mov}; });
+  return ref;
+}
+function toggleParcelaGuardada(pid){
+  if(readonlyView()) return save();
+  const p=(S.cinfo.parcelas||[]).find(x=>x.id===pid); if(!p) return;
+  const novo=p.tipo==='guardado'?'limite':'guardado';
+  parcCxUndo(p);
+  const q={...p,tipo:novo}; delete q.cxRef; const cxr=parcCxAporte(q); if(Object.keys(cxr).length) q.cxRef=cxr;
+  S.cinfo={...S.cinfo,parcelas:S.cinfo.parcelas.map(x=>x.id===pid?q:x)}; save('cartaoinfo','geral',S.cinfo);
+  toast(novo==='guardado'?p.desc+' · dinheiro guardado na caixinha do cartão':p.desc+' · desfeito');
+}
+function gBtnCompra(a,mk){
+  // botão "Guardei" nas compras do cartão da lista de Gastos do mês
+  if(a.src!=='cartao') return '';
+  const pr=parcDaCompra(a.id); const on=pr?pr.tipo==='guardado':!!a.guardado;
+  const at=pr?`data-guardar-parc="${esc(pr.id)}"`:`data-guardar-compra="${esc(a.id)}" data-mk="${esc(mk)}"`;
+  return `<button class="btn sm ${on?'':'ghost'}" style="padding:3px 8px;white-space:nowrap" ${at} title="${on?'Desfazer: tirar do guardado':'Marcar que o dinheiro dessa compra já está guardado'}">${on?'✓ Guardado':'Guardei'}</button>`;
+}
 function itensGuardarCartao(){
   // o que está nas faturas abertas (uma por cartão) e ainda não foi separado na caixinha
   const out=[];
@@ -1110,7 +1138,7 @@ function vGastos(){
   const gfl=[['Todos','Todos'],['pix','Pix'],['debito','Débito'],['dinheiro','Dinheiro'],['cartao','Cartão de crédito'],['casal','Do casal'],...gvales.map(v=>['vale:'+v,v])];
   h += `<div class="card section"><div class="card-h"><div><h2>Compras do mês</h2><p>Pix, débito, dinheiro, cartão e refeição · total ${fmt(sum(todos,x=>x.valor))}</p></div><button class="btn sm" data-act="importar-extrato">Importar extrato</button></div>
     <div class="chips" style="margin:10px 0">${gfl.map(([k,n])=>`<button class="chip" data-gfiltro="${esc(k)}" aria-pressed="${gf===k}">${esc(n)}</button>`).join('')}</div>
-    ${todos.length?`<div class="rows">${todos.map(a=>{ const it=a.src==='avulso'&&a.itemId&&(o.itens||[]).find(i=>i.id===a.itemId); const ro=a.src==='vale'; return `<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div><div class="s">${esc(a.label)}${it?` · <i class="dot" style="background:${CAT[it.cat].c};width:7px;height:7px"></i> ${esc(CAT[it.cat].n)} › ${esc(it.nome)}`:''}${a.parcela?' · '+esc(a.parcela):''}${a.casal?' · 👫 do casal':''}</div></div><span class="v">${fmt(a.valor)}</span>${ro?'':`<button class="iconbtn" aria-label="Editar" data-edit-compra="${a.src}" data-id="${a.id}" data-mk="${mk}">${svg('pencil')}</button>`}${ro?'<span class="muted" style="font-size:.78rem">edite no Rolê</span>':`<button class="iconbtn" aria-label="Apagar" data-del-${a.src==='avulso'?'avulso':'compra'}="${a.id}">${svg('trash')}</button>`}</div>`; }).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
+    ${todos.length?`<div class="rows">${todos.map(a=>{ const it=a.src==='avulso'&&a.itemId&&(o.itens||[]).find(i=>i.id===a.itemId); const ro=a.src==='vale'; return `<div class="row">${dBox(a.data)}<div class="grow"><div class="t">${esc(a.desc)}</div><div class="s">${esc(a.label)}${it?` · <i class="dot" style="background:${CAT[it.cat].c};width:7px;height:7px"></i> ${esc(CAT[it.cat].n)} › ${esc(it.nome)}`:''}${a.parcela?' · '+esc(a.parcela):''}${a.casal?' · 👫 do casal':''}</div></div><span class="v">${fmt(a.valor)}</span>${gBtnCompra(a,mk)}${ro?'':`<button class="iconbtn" aria-label="Editar" data-edit-compra="${a.src}" data-id="${a.id}" data-mk="${mk}">${svg('pencil')}</button>`}${ro?'<span class="muted" style="font-size:.78rem">edite no Rolê</span>':`<button class="iconbtn" aria-label="Apagar" data-del-${a.src==='avulso'?'avulso':'compra'}="${a.id}">${svg('trash')}</button>`}</div>`; }).join('')}</div>`:'<p class="muted">Nada registrado neste mês.</p>'}
   </div>`;
   // histórico
   const ks = Object.keys(S.orc).sort().slice(-8);
@@ -1205,7 +1233,8 @@ function cartaoNaCat(o,catK){
   // compras marcadas "guardei" (valor cheio, no mês da compra) e contas depois do "Guardei"
   const mk=o.mes||UI.month, por={};
   const add=(nome,e)=>{ const k=semAcento(nome); (por[k]=por[k]||{nome,itens:[]}).itens.push(e); };
-  (S.cartao[mk]?.compras||[]).filter(x=>x.guardado&&!x.fora&&x.cat&&x.cat.split('|')[0]===catK).forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,card:x.cartao,valor:+x.valor||0}));
+  (S.cartao[mk]?.compras||[]).filter(x=>x.guardado&&!x.fora&&x.cat&&x.cat.split('|')[0]===catK&&!parcGuardadoDaCompra(x.id)).forEach(x=>add(x.cat.split('|')[1],{desc:x.desc,card:x.cartao,valor:+x.valor||0}));
+  if(catK==='gerais') (S.cinfo.parcelas||[]).filter(p=>p.tipo==='guardado').forEach(p=>{ const pm=parcMeses(p), n=p.valores.length; p.valores.forEach((v,i)=>{ if(i<(p.pagas||0)||pm[i]!==mk) return; const nm=p.desc+' '+(i+1)+'/'+n; add(nm,{desc:nm,card:p.cartao,valor:r2(+v||0),parc:true}); }); });
   (S.cinfo.contas||[]).filter(x=>contaGuardada(x)&&guardadoNoMes(x,mk)&&catDaConta(x,o).split('|')[0]===catK&&!(S.cartao[mk]?.compras||[]).some(y=>!y.parcela&&y.cartao===x.cartao&&semAcento(y.desc)===semAcento(x.desc)))
     .forEach(x=>add(x.desc,{desc:x.desc,card:x.cartao,valor:+x.valor||0}));
   return por;
@@ -1521,7 +1550,9 @@ function parcForm(id){
     const n=parseInt(v.n)||0, tot=r2(parseNum(v.total)); if(n<1||!tot) return 'Informe o valor total e o nº de parcelas';
     let valores = (id && p.valores.length===n && Math.abs(sum(p.valores)-tot)<0.005) ? p.valores : parcelasDe(tot,n);
     if(!/^\d{4}-\d{2}$/.test(v.inicio)) return 'Escolha a fatura da 1ª parcela';
+    if(id) parcCxUndo(p);
     const q={...p,id:id||uid('p'),desc:v.desc.trim(),cartao:v.cartao,tipo:v.tipo,valores,pagas:Math.max(0,Math.min(n,parseInt(v.pagas)||0)),inicio:v.inicio,obs:v.obs.trim()}; delete q.proxQtd;
+    delete q.cxRef; const cxr=parcCxAporte(q); if(Object.keys(cxr).length) q.cxRef=cxr;
     const jt={...(id?parcBase(p).juntas:{})}; if(Object.keys(jt).length) q.juntas=jt; else delete q.juntas;
     const lst=(S.cinfo.parcelas||[]).filter(x=>x.id!==q.id); lst.push(q);
     save('cartaoinfo','geral',{...S.cinfo,parcelas:lst}); toast(id?'Salvo':'Compra parcelada adicionada');
@@ -2575,7 +2606,7 @@ const ACT = {
       toast(q===0?`Nada na fatura de ${mLabel(v.mes).toLowerCase()}${v.juntarProx?' · '+(jt[addMonth(v.mes,1)]||1)+' na seguinte':''} · termina em ${mLabel(fim).toLowerCase()}`:q>1?`${q} parcelas na fatura de ${mLabel(v.mes).toLowerCase()} · termina em ${mLabel(fim).toLowerCase()}`:'Fatura de '+mLabel(v.mes).toLowerCase()+' com 1 parcela, normal'); }});
   },
   'editar-parcela'(d){ parcForm(d.id); },
-  'apagar-parcela'(d){ save('cartaoinfo','geral',{...S.cinfo,parcelas:(S.cinfo.parcelas||[]).filter(x=>x.id!==d.id)}); toast('Apagada'); },
+  'apagar-parcela'(d){ const pp=(S.cinfo.parcelas||[]).find(x=>x.id===d.id); if(pp) parcCxUndo(pp); save('cartaoinfo','geral',{...S.cinfo,parcelas:(S.cinfo.parcelas||[]).filter(x=>x.id!==d.id)}); toast('Apagada'); },
   'nova-conta'(){ const cards=S.config.cartoes||['Nubank']; gastoRapido({recorrente:true,forma:'card:'+cards[0],guardado:(UI.contasTab||'guardado')==='guardado'}); },
   'comprar-ativo'(){ const inv=potesList('investimento'); if(!inv.length){ toast('Crie um investimento primeiro (ex.: Ações, FIIs, Cripto)'); return; }
     form({title:'Comprar ou vender ativo', submit:'Continuar', fields:[{name:'pote',label:'Em qual investimento',type:'select',options:inv.map(p=>[p.id,p.nome+(p.classe?' ('+p.classe+')':'')]),value:inv[0].id}],
@@ -3815,7 +3846,8 @@ document.addEventListener('click', e=>{
   const di = t.closest('[data-del-item]'); if(di){ const o=ensureOrc(UI.month); o.itens=o.itens.filter(i=>i.id!==di.dataset.delItem); save('orcamento',UI.month,o); toast('Item apagado'); return; }
   const cavu = t.closest('[data-cat-avulso]'); if(cavu){ avulsoCatForm(cavu.dataset.catAvulso); return; }
   const da = t.closest('[data-del-avulso]'); if(da){ const o=ensureOrc(UI.month); const a=(o.avulsos||[]).find(i=>i.id===da.dataset.delAvulso); if(a&&a.itemId){ const it=(o.itens||[]).find(i=>i.id===a.itemId); if(it) it.real=Math.max(0,r2((+it.real||0)-a.valor)); } o.avulsos=(o.avulsos||[]).filter(i=>i.id!==da.dataset.delAvulso); save('orcamento',UI.month,o); if(a&&a.contaAgendadaId){ S.config={...S.config,contasAgendadas:(S.config.contasAgendadas||[]).filter(x=>x.id!==a.contaAgendadaId)}; save('config','geral',S.config); } toast(a&&a.itemId?'Apagado da lista e da categoria':'Apagado'); return; }
-  const gc = t.closest('[data-guardar-compra]'); if(gc){ if(readonlyView()) return save(); const gx=(S.cartao[gc.dataset.mk]?.compras||[]).find(q=>q.id===gc.dataset.guardarCompra); if(gx&&gx.guardado) toggleGuardarCompra(gx.id,gc.dataset.mk); else guardarCompraForm(gc.dataset.guardarCompra, gc.dataset.mk); return; }
+  const gpr = t.closest('[data-guardar-parc]'); if(gpr){ if(readonlyView()) return save(); toggleParcelaGuardada(gpr.dataset.guardarParc); return; }
+  const gc = t.closest('[data-guardar-compra]'); if(gc){ if(readonlyView()) return save(); const gpc=parcDaCompra(gc.dataset.guardarCompra); if(gpc){ toggleParcelaGuardada(gpc.id); return; } const gx=(S.cartao[gc.dataset.mk]?.compras||[]).find(q=>q.id===gc.dataset.guardarCompra); if(gx&&gx.guardado) toggleGuardarCompra(gx.id,gc.dataset.mk); else guardarCompraForm(gc.dataset.guardarCompra, gc.dataset.mk); return; }
   const dc = t.closest('[data-del-compra]'); if(dc){ if(readonlyView()) return save(); const c=JSON.parse(JSON.stringify(S.cartao[UI.month])); const del=c.compras.find(x=>x.id===dc.dataset.delCompra); c.compras=c.compras.filter(x=>x.id!==dc.dataset.delCompra); save('cartao',UI.month,c); if(del&&del.guardado) tirarDaCaixinha(del); if((S.cinfo.parcelas||[]).some(p=>p.compraId===dc.dataset.delCompra)){ save('cartaoinfo','geral',{...S.cinfo,parcelas:S.cinfo.parcelas.filter(p=>p.compraId!==dc.dataset.delCompra)}); toast('Compra e parcelas apagadas'); } else toast('Compra apagada'); return; }
   const as = t.closest('[data-add-solta]'); if(as){ if(readonlyView()) return save(); let c=null; Object.values(S.cartao).forEach(m=>(m.compras||[]).forEach(x=>{ if(x.id===as.dataset.addSolta) c=x; })); if(c){ addParcelaDeCompra(c,'limite'); toast(c.desc+' adicionada às parcelas'); } return; }
   const dm = t.closest('[data-del-mov]'); if(dm){ const id=dm.dataset.pote; const p=JSON.parse(JSON.stringify(S.potes[id])); const mvd=p.movimentos.find(m=>m.id===dm.dataset.delMov); if(mvd&&mvd.gasto) tirarDoGasto(mvd.gasto); if(mvd&&mvd.receb) tirarRecebido(mvd.receb); tirarEspelho(mvd); p.movimentos=p.movimentos.filter(m=>m.id!==dm.dataset.delMov); save('potes',id,p); openPote(id); return; }
