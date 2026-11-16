@@ -23,6 +23,74 @@ img{max-width:100%}
 #login p{color:var(--ink-2,#554b5e);margin:0 0 24px}
 #login button{display:inline-flex;align-items:center;gap:10px;border:1px solid rgba(0,0,0,.15);background:#fff;color:#222;border-radius:12px;padding:12px 20px;font:600 1rem "Figtree",system-ui,sans-serif;cursor:pointer}
 #login .err{color:#c2412f;font-size:.86rem;margin-top:14px}
+
+/* Refinamento visual inspirado na referência — somente CSS/apresentação */
+.cal-panel{padding:18px 18px 16px;border-radius:20px;box-shadow:0 8px 24px rgba(55,31,65,.07);}
+.cal-head{margin-bottom:10px;}
+.cal-head svg{width:44px;height:44px;}
+.cal-head h2{font-size:1rem;font-weight:750;}
+.cal-head p{font-size:.7rem;}
+.cal-month-tag{font-size:.65rem;padding:6px 10px;border-radius:999px;}
+.cal-summary{position:relative;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);align-items:center;gap:12px;padding:14px 14px 23px;margin-bottom:16px;border-radius:16px;background:linear-gradient(115deg,#f8f3fa 0%,#f4edf7 100%);border:1px solid #eee2f2;}
+.cal-summary-main{padding-right:10px;border-right:1px solid #e4d6e9;}
+.cal-summary-main>span,.cal-summary-side span{font-size:.68rem;}
+.cal-summary-main>b{font-size:1.55rem;letter-spacing:-.035em;color:#713783;}
+.cal-summary-main>small{font-size:.62rem;}
+.cal-summary-side{min-width:0;gap:5px;padding-left:2px;}
+.cal-summary-side>div{gap:3px;}
+.cal-summary-side b{font-size:.87rem;}
+.cal-summary .cal-progress{position:absolute;left:14px;right:14px;bottom:9px;height:5px;margin:0;border-radius:20px;background:#e7ddeb;}
+.cal-summary .cal-progress i{background:#793b8b;border-radius:20px;}
+.cal-section-label{margin:3px 0 9px;font-size:.79rem;}
+.cal-section-label span{font-size:.63rem;}
+.cal-chips{gap:6px;padding-bottom:2px;}
+.cal-chip{min-height:84px;padding:9px 2px 7px;border-radius:14px;gap:5px;box-shadow:0 1px 2px rgba(43,25,51,.025);}
+.cal-chip .cal-weekday{font-size:.62rem;}
+.cal-chip b{font-size:1.02rem;}
+.cal-chip .dots{min-height:7px;}
+.cal-chip .dots i{width:5px;height:5px;}
+.cal-chip small{font-size:.57rem;font-weight:650;}
+.cal-chip.has-items{background:#fbf9fc;}
+.cal-chip.sel{background:#7b3f8c;box-shadow:0 4px 10px rgba(123,63,140,.2);}
+.cal-chip.no-items{opacity:.78;}
+.cal-day-detail{margin:13px 0 0;padding:0 0 9px;background:transparent;border-radius:0;}
+.cal-day-heading{align-items:center;}
+.cal-day-heading>div:first-child>span{font-size:.64rem;color:#8c7c91;}
+.cal-day-heading h3{font-size:.9rem;font-weight:750;margin-top:2px;}
+.cal-day-total b{font-size:.9rem;}
+.cal-day-foot{margin-top:8px;padding-top:7px;font-size:.61rem;border-top:1px solid #eee7f1;}
+.cal-day-detail+.cal-list{padding:0 11px;background:#fff;border:1px solid #eee5f1;border-radius:14px;}
+.cal-list{border-top:0;}
+.cal-row{padding:11px 0;gap:10px;border-bottom:1px solid #f0eaf2;}
+.cal-row:last-child{border-bottom:0;}
+.cal-radio{width:20px;height:20px;border-width:1.5px;}
+.cal-row-title{font-size:.79rem;font-weight:700;}
+.cal-row-meta{font-size:.63rem;}
+.cal-row-end{gap:5px;}
+.cal-row-end .val{font-size:.79rem!important;}
+.cal-status{font-size:.57rem;padding:3px 7px;}
+.cal-no-date{margin-top:15px;}
+.cal-no-date .cal-section-label{padding-bottom:7px;border-bottom:1px solid #eee5f1;margin-bottom:0;}
+.cal-no-date .cal-list{padding:0 11px;border:1px solid #eee5f1;border-radius:14px;background:#fff;}
+.cal-no-date .cal-row{padding:11px 0;}
+@media(max-width:520px){
+ .cal-panel{padding:14px 13px 13px;border-radius:17px;}
+ .cal-head{gap:8px;}
+ .cal-head svg{width:40px;height:40px;}
+ .cal-head h2{font-size:.94rem;}
+ .cal-summary{grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:9px;padding:12px 11px 22px;margin-bottom:14px;}
+ .cal-summary-main>b{font-size:1.4rem;}
+ .cal-summary-side{min-width:0;}
+ .cal-summary-side b{font-size:.78rem;}
+ .cal-summary .cal-progress{left:11px;right:11px;bottom:8px;}
+ .cal-chips{gap:5px;}
+ .cal-chip{min-height:79px;padding:8px 1px 6px;border-radius:12px;}
+ .cal-chip .cal-weekday{font-size:.57rem;}
+ .cal-chip b{font-size:.95rem;}
+ .cal-chip small{font-size:.51rem;}
+ .cal-section-label span{max-width:50%;}
+}
+
 </style>
 <!-- Firebase (grátis no plano Spark) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1122,13 +1190,13 @@ function calendarioContasHtml(mk){
   const sem=itens.filter(x=>!x.dia);
   return `<div class="card section cal-panel">
     <div class="card-h cal-head"><div style="display:flex;gap:12px;align-items:center;min-width:0">${calIcone()}<div style="min-width:0"><h2>Calendário de contas</h2><p>${mLabel(mk)} · ${itens.length} lançamentos${atrasadas?' · '+atrasadas+' em atraso':''}</p></div></div><span style="display:flex;gap:6px;align-items:center"><span class="cal-month-tag">${percentual}% pago</span><button class="btn sm ghost" style="padding:5px 7px" data-act="cal-nova" aria-label="Nova conta" title="Nova conta">${svg('plus')}</button></span></div>
-    <div class="cal-progress"><i style="width:${percentual}%"></i></div>
     <div class="cal-summary">
       <div class="cal-summary-main"><span>Falta pagar</span><b>${fmt(aPagarMes)}</b><small>${naoPagos.length} ${naoPagos.length===1?'conta pendente':'contas pendentes'}</small></div>
       <div class="cal-summary-side"><div><span>Já pago</span><b>${fmt(sum(itens.filter(x=>x.paga&&!x.rec),x=>x.v))}</b></div>${aReceberMes?`<div><span>A receber</span><b>${fmt(aReceberMes)}</b></div>`:''}</div>
+      <div class="cal-progress"><i style="width:${percentual}%"></i></div>
     </div>
     ${dias.length?`<div class="cal-section-label">Esta semana <span>Selecione um dia com lançamento</span></div><div class="cal-chips">${chips}</div>`:''}
-    ${sel?`<div class="cal-day-detail"><div class="cal-day-heading"><div><span>${quando||'Detalhes do dia'}</span><h3>${String(sel).padStart(2,'0')} de ${mLabel(mk)}</h3></div><div class="cal-day-total"><b>${fmt(totalPendenteDia)}</b><small>em aberto</small></div></div><div class="cal-day-foot"><span>${doDia.length} ${doDia.length===1?'lançamento':'lançamentos'}</span><span>${pagos} de ${doDia.length} concluídos</span></div></div>`:''}
+    ${sel?`<div class="cal-day-detail"><div class="cal-day-heading"><div><span>${quando||'Detalhes do dia'}</span><h3>Contas do dia ${String(sel).padStart(2,'0')}</h3></div><div class="cal-day-total"><b>${fmt(totalPendenteDia)}</b><small>em aberto</small></div></div><div class="cal-day-foot"><span>${doDia.length} ${doDia.length===1?'lançamento':'lançamentos'}</span><span>${pagos} de ${doDia.length} concluídos</span></div></div>`:''}
     ${doDia.length?`<div class="cal-list">${doDia.map(linha).join('')}</div>`:(dias.length?'':'<p class="muted" style="margin:12px 0 0">Nenhuma conta com dia de vencimento neste mês.</p>')}
     ${sem.length?`<div class="cal-no-date"><div class="cal-section-label">Sem dia de vencimento</div><div class="cal-list">${sem.map(linha).join('')}</div></div>`:''}
   </div>`;
