@@ -673,6 +673,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--line-2);border-bottom:0}
   .cal-summary{gap:8px;padding:10px}
   .cal-summary-main>b{font-size:1.25rem}
 }
+.cal-link{border:0;background:none;color:var(--accent);font:inherit;font-size:.7rem;font-weight:600;padding:0;margin-left:auto;cursor:pointer;white-space:nowrap}
 </style>
 
 <div class="app">
@@ -1165,9 +1166,10 @@ function calendarioContasHtml(mk){
   const inicioSemana=new Date(dataBase);
   inicioSemana.setDate(dataBase.getDate()-((dataBase.getDay()+6)%7));
   const nomesSemana=['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-  const chips=nomesSemana.map((nome,i)=>{
-    const data=new Date(inicioSemana);
-    data.setDate(inicioSemana.getDate()+i);
+  const y0=Number(mk.slice(0,4)), m0=Number(mk.slice(5,7))-1, nDiasMes=new Date(y0,m0+1,0).getDate();
+  const datasCal=UI.calMes?Array.from({length:nDiasMes},(_,i)=>new Date(y0,m0,i+1)):[0,1,2,3,4,5,6].map(i=>{const x=new Date(inicioSemana);x.setDate(inicioSemana.getDate()+i);return x;});
+  const chips=datasCal.map(data=>{
+    const nome=nomesSemana[(data.getDay()+6)%7];
     const mesmoMes=data.getFullYear()===Number(mk.slice(0,4))&&data.getMonth()===Number(mk.slice(5,7))-1;
     const d=data.getDate();
     const l=mesmoMes?itens.filter(x=>x.dia===d):[];
@@ -1195,7 +1197,7 @@ function calendarioContasHtml(mk){
       <div class="cal-summary-side"><div><span>Já pago</span><b>${fmt(sum(itens.filter(x=>x.paga&&!x.rec),x=>x.v))}</b></div>${aReceberMes?`<div><span>A receber</span><b>${fmt(aReceberMes)}</b></div>`:''}</div>
       <div class="cal-progress"><i style="width:${percentual}%"></i></div>
     </div>
-    ${dias.length?`<div class="cal-section-label">Esta semana <span>Selecione um dia com lançamento</span></div><div class="cal-chips">${chips}</div>`:''}
+    ${dias.length?`<div class="cal-section-label">${UI.calMes?'Mês completo':'Esta semana'} <span>Selecione um dia com lançamento</span> <button class="cal-link" data-act="cal-mes">${UI.calMes?'Ver semana':'Ver mês completo'} ›</button></div><div class="cal-chips">${chips}</div>`:''}
     ${sel?`<div class="cal-day-detail"><div class="cal-day-heading"><div><span>${quando||'Detalhes do dia'}</span><h3>Contas do dia ${String(sel).padStart(2,'0')}</h3></div><div class="cal-day-total"><b>${fmt(totalPendenteDia)}</b><small>em aberto</small></div></div><div class="cal-day-foot"><span>${doDia.length} ${doDia.length===1?'lançamento':'lançamentos'}</span><span>${pagos} de ${doDia.length} concluídos</span></div></div>`:''}
     ${doDia.length?`<div class="cal-list">${doDia.map(linha).join('')}</div>`:(dias.length?'':'<p class="muted" style="margin:12px 0 0">Nenhuma conta com dia de vencimento neste mês.</p>')}
     ${sem.length?`<div class="cal-no-date"><div class="cal-section-label">Sem dia de vencimento</div><div class="cal-list">${sem.map(linha).join('')}</div></div>`:''}
@@ -2625,6 +2627,7 @@ const ACT = {
     if(ref&&ref.mes&&S.orc[ref.mes]){ const o=JSON.parse(JSON.stringify(S.orc[ref.mes])); const av=(o.avulsos||[]).find(a=>a.id===ref.avulso); if(av){ av.forma=x.forma||'pix'; save('orcamento',ref.mes,o); } }
     S.config={...S.config,contasAgendadas:lst.map(a=>a.id===x.id?{...a,pagaEm:hoje}:a)}; save('config','geral',S.config);
     toast(x.desc+' paga · '+fmt(x.valor)+' em Gastos do mês'); },
+  'cal-mes'(){ UI.calMes=!UI.calMes; render(); },
   'cal-dia'(d){ const dia=+d.dia; UI.calDia=(UI.calDia&&UI.calDia.mk===UI.month&&UI.calDia.dia===dia)?null:{mk:UI.month,dia}; render(); },
   'editar-inicio'(){
     const cur=inicioQuickIds();
@@ -3917,7 +3920,7 @@ document.addEventListener('click', e=>{
   if(t.closest('[data-close]') || t.matches('[data-scrim]')){ closeModal(); return; }
   const mn = t.closest('[data-mnav]'); if(mn){ UI.month=addMonth(UI.month,+mn.dataset.mnav); render(); return; }
   const act = t.closest('[data-act]');
-  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes','sugestoes','cal-dia','ajustes'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
+  if(act && readonlyView() && !['cores','backup','exportar','sair','fotos','foto-remover','sugerir','sugestao-enviar','ver-sugestoes','sugestoes','cal-dia','cal-mes','ajustes'].includes(act.dataset.act)){ toast('Só '+nomeParceiro()+' pode alterar'); return; }
   if(act){
     e.preventDefault();
     if(act.dataset.act==='apagar-pote'){ const id=act.dataset.pote; closeModal(); remove('potes',id); toast('Apagado'); return; }
